@@ -19,6 +19,8 @@ import { useUser } from "@clerk/nextjs"
 import { toast } from "@/components/ui/use-toast"
 import { useToast } from "@/components/ui/use-toast"
 import { TenderEvent } from "@/lib/events/tender-events"
+import { Badge } from "@/components/ui/badge"
+import { ExportButton } from "@/components/dashboard/export-button"
 
 // Add the KeywordVisibilityState enum at the top of the file
 enum KeywordVisibilityState {
@@ -48,7 +50,7 @@ async function fetchUserTenderViews(userId: string) {
 export function TenderBoard({ className, initialTenders = [], onArchive }: TenderBoardProps) {
   const { user } = useUser()
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState<'inbox' | 'archived'>('inbox')
+  const [activeTab, setActiveTab] = useState<"inbox" | "archived">("inbox")
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   
   // Format initial tenders to match the expected structure
@@ -284,7 +286,11 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
     ).length;
   }, [localTenders]);
 
-  // Fix the filteredTenders function to use boardFilteredTenders
+  // Add these state variables near the top of the component
+  const [searchQuery, setSearchQuery] = useState('');
+  const [titleSearchFilter, setTitleSearchFilter] = useState('');
+
+  // Modify the filteredTenders function to include title search
   const filteredTenders = useMemo(() => {
     if (!boardFilteredTenders) {
       console.log('No board filtered tenders available');
@@ -297,6 +303,14 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
     const result = boardFilteredTenders.filter(group => {
       const tender = group.tender;
       const versions = group.versions || [];
+      
+      // Title search filter
+      if (titleSearchFilter) {
+        const tenderTitle = (tender.title || '').toLowerCase();
+        if (!tenderTitle.includes(titleSearchFilter)) {
+          return false;
+        }
+      }
       
       // Filter by include tags (show ONLY these tags)
       if (filters.includeTags && filters.includeTags.length > 0) {
@@ -411,7 +425,7 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
     
     console.log(`Filtering complete. ${result.length} tenders match the filters.`);
     return result;
-  }, [boardFilteredTenders, filters]);
+  }, [boardFilteredTenders, filters, titleSearchFilter]);
 
   // Group tenders by date (year and month)
   const groupedTenders = useMemo(() => {
@@ -589,7 +603,9 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
       types,
       organizations,
       dateRange,
-      sortDirection
+      sortDirection,
+      includeTags: filters.includeTags,
+      excludeTags: filters.excludeTags
     });
     setSortDirection(sortDirection);
   };
@@ -683,6 +699,118 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
     };
   }, []);
 
+  // Update the handleFilter function to set filteredTenders
+  const handleFilter = useCallback((filteredResults: Tender[]) => {
+    setFilteredTenders(filteredResults);
+  }, []);
+
+  // Helper function to check if a tender matches the current filters
+  const matchesTenderFilters = (group: TenderGroup) => {
+    const tender = group.tender;
+    const versions = group.versions || [];
+    
+    // Filter by include tags (show ONLY these tags)
+    if (filters.includeTags && filters.includeTags.length > 0) {
+      const tenderTags = Array.isArray(tender?.tags) ? tender.tags : [];
+      if (!tenderTags.some(tag => filters.includeTags.includes(tag))) {
+        return false;
+      }
+    }
+    
+    // Filter by exclude tags (hide these tags)
+    if (filters.excludeTags && filters.excludeTags.length > 0) {
+      const tenderTags = Array.isArray(tender?.tags) ? tender.tags : [];
+      if (tenderTags.some(tag => filters.excludeTags.includes(tag))) {
+        return false;
+      }
+    }
+    
+    // Filter by organizations
+    if (filters.organizations.length > 0) {
+      const orgs = [];
+      if (tender?.unit_name) {
+        orgs.push(tender.unit_name);
+      }
+      versions.forEach(v => {
+        const versionOrg = v.data?.unit_name || 
+                           v.enrichedData?.unit_name || 
+                           v.data?.detail?.["機關資料:機關名稱"] || 
+                           v.data?.detail?.["機關資料:單位名稱"];
+        if (versionOrg) {
+          orgs.push(versionOrg);
+        }
+      });
+      if (!orgs.some(org => filters.organizations.includes(org))) {
+        return false;
+      }
+    }
+    
+    // Filter by types
+    if (filters.types.length > 0) {
+      if (!tender?.brief?.type || !filters.types.includes(tender.brief.type)) {
+        return false;
+      }
+    }
+    
+    // Date range filter
+    if (filters.dateRange && filters.dateRange.length === 2 && 
+        filters.dateRange[0] !== 0 && filters.dateRange[1] !== 0) {
+      try {
+        const dateStr = tender.date.toString();
+        const year = parseInt(dateStr.substring(0, 4));
+        const month = parseInt(dateStr.substring(4, 6)) - 1;
+        const day = parseInt(dateStr.substring(6, 8));
+        
+        const tenderDate = new Date(year, month, day);
+        
+        const startDateStr = filters.dateRange[0].toString();
+        const startYear = parseInt(startDateStr.substring(0, 4));
+        const startMonth = parseInt(startDateStr.substring(4, 6)) - 1;
+        const startDay = parseInt(startDateStr.substring(6, 8));
+        
+        const endDateStr = filters.dateRange[1].toString();
+        const endYear = parseInt(endDateStr.substring(0, 4));
+        const endMonth = parseInt(endDateStr.substring(4, 6)) - 1;
+        const endDay = parseInt(endDateStr.substring(6, 8));
+        
+        const startDate = new Date(startYear, startMonth, startDay);
+        const endDate = new Date(endYear, endMonth, endDay);
+        endDate.setDate(endDate.getDate() + 1);
+        
+        if (tenderDate < startDate || tenderDate > endDate) {
+          return false;
+        }
+      } catch (error) {
+        return true;
+      }
+    }
+    
+    return true;
+  };
+
+  // Calculate visible counts based on filtered results
+  const visibleInboxCount = activeTab === "inbox" 
+    ? filteredTenders.length 
+    : localTenders.filter(group => 
+        !(group.tender.isArchived === true || group.tender.archived === true) &&
+        matchesTenderFilters(group)
+      ).length;
+
+  const visibleArchivedCount = activeTab === "archived" 
+    ? filteredTenders.length 
+    : localTenders.filter(group => 
+        (group.tender.isArchived === true || group.tender.archived === true) &&
+        matchesTenderFilters(group)
+      ).length;
+
+  // Calculate counts for each section
+  const inboxTenders = localTenders.filter(group => !group.tender.archived);
+  const archivedTenders = localTenders.filter(group => group.tender.archived);
+  
+  // Total counts for each section
+  const totalInboxCount = inboxCount;
+  const totalArchivedCount = archivedCount;
+
   return (
     <div className={cn("h-[85vh] rounded-lg shadow-sm", className)}>
       <div className="flex flex-col h-full">
@@ -707,11 +835,9 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                   >
                     <Inbox className="h-4 w-4" />
                     <span>Inbox</span>
-                    {inboxCount > 0 && (
-                      <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs">
-                        {inboxCount}
-                      </span>
-                    )}
+                    <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs">
+                      {visibleInboxCount}/{totalInboxCount}
+                    </span>
                   </Button>
                   <Button
                     variant={activeTab === 'archived' ? 'default' : 'outline'}
@@ -721,12 +847,45 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                   >
                     <Archive className="h-4 w-4" />
                     <span>Archived</span>
-                    {archivedCount > 0 && (
-                      <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs">
-                        {archivedCount}
-                      </span>
-                    )}
+                    <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs">
+                      {visibleArchivedCount}/{totalArchivedCount}
+                    </span>
                   </Button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {/* Global Search */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search titles..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        // Apply the search filter
+                        if (e.target.value.trim() === '') {
+                          // If search is cleared, reset to normal filtering
+                          setTitleSearchFilter('');
+                        } else {
+                          // Apply the search filter
+                          setTitleSearchFilter(e.target.value.toLowerCase());
+                        }
+                      }}
+                      className="h-9 w-64 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    {searchQuery && (
+                      <button 
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setTitleSearchFilter('');
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  <ExportButton tenders={filteredTenders} />
                 </div>
               </div>
               
@@ -734,22 +893,48 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                 <Collapsible>
                   <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-card p-4">
                     <div className="flex items-center gap-4 min-w-0">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
+                      <Filter className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium shrink-0">Filters</span>
                       {activeFiltersText && (
-                        <span className="text-sm text-muted-foreground truncate max-w-[1000px]">
+                        <span className="text-sm text-muted-foreground truncate max-w-[700px]">
                           {activeFiltersText}
                         </span>
                       )}
                     </div>
+                    {(filters.organizations.length > 0 || filters.types.length > 0) && (
+                      <Button 
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent collapsible from toggling
+                          // Clear all filters
+                          setFilters({
+                            ...filters,
+                            organizations: [],
+                            types: [],
+                          });
+                          // Call handleFilterChange to update the UI
+                          handleFilterChange({
+                            tags: filters.tags,
+                            types: [],
+                            organizations: [],
+                            dateRange: filters.dateRange,
+                            sortDirection: filters.sortDirection
+                          });
+                        }}
+                      >
+                        Clear Filters
+                      </Button>
+                    )}
                   </CollapsibleTrigger>
                   <CollapsibleContent className="rounded-lg border bg-card mt-2 p-4">
                     <TenderFilters
                       tags={allTags}
                       types={allTypes}
-                      tenders={localTenders}
+                      tenders={activeTab === "inbox" ? inboxTenders : archivedTenders}
                       dateRange={dateRange}
                       onFilterChange={handleFilterChange}
+                      currentFilters={filters}
                     />
                   </CollapsibleContent>
                 </Collapsible>

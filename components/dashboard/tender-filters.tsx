@@ -9,6 +9,136 @@ import { formatTenderDate } from "@/lib/date-utils"
 import { startOfMonth, endOfMonth, addMonths, format } from "date-fns"
 import { TenderGroup } from "@/types/tender"
 
+// Move FilterSection outside of TenderFilters component
+// This prevents it from being recreated on every render
+const FilterSection = ({ 
+  title, 
+  items, 
+  selectedItems, 
+  onItemClick, 
+  onSelectAll, 
+  onClear, 
+  onBatchSelect 
+}: { 
+  title: string
+  items: string[]
+  selectedItems: string[]
+  onItemClick: (item: string) => void
+  onSelectAll: () => void
+  onClear: () => void
+  onBatchSelect: (items: string[]) => void
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const MAX_VISIBLE_ROWS = 2
+  const ITEMS_PER_ROW = 3 // Approximate items per row
+  
+  // Filter items based on search term
+  const filteredItems = searchTerm 
+    ? items.filter(item => item.toLowerCase().includes(searchTerm.toLowerCase()))
+    : items
+  
+  // Only limit visible items if not searching and not expanded
+  const visibleItems = searchTerm || isExpanded 
+    ? filteredItems 
+    : filteredItems.slice(0, MAX_VISIBLE_ROWS * ITEMS_PER_ROW)
+    
+  const hasMore = !searchTerm && filteredItems.length > MAX_VISIBLE_ROWS * ITEMS_PER_ROW
+
+  // Function to select all filtered items
+  const handleSelectAllFiltered = () => {
+    //! Don't select items one by one - this causes re-renders
+    //! Instead, collect all items to select and pass them at once
+    const itemsToAdd = filteredItems.filter(item => !selectedItems.includes(item));
+    
+    if (itemsToAdd.length > 0) {
+      // Create a new array with all selected items
+      const newSelection = [...selectedItems, ...itemsToAdd];
+      
+      // Use a batch update approach instead of individual updates
+      // This will prevent multiple re-renders
+      onBatchSelect(newSelection);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium">{title}</h4>
+        <div className="flex gap-2 items-center">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-8 w-32 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            {searchTerm && (
+              <button 
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchTerm("")}
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {searchTerm && filteredItems.length > 0 && (
+            <Button 
+              variant="secondary" 
+              size="sm"
+              onClick={handleSelectAllFiltered}
+            >
+              Select Searched
+            </Button>
+          )}
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={onSelectAll}
+          >
+            Select All
+          </Button>
+          <Button 
+            variant={selectedItems.length > 0 ? "destructive" : "ghost"} 
+            size="sm"
+            onClick={onClear}
+          >
+            Clear
+          </Button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {visibleItems.map((item: string) => (
+            <Badge
+              key={item}
+              variant={selectedItems.includes(item) ? "default" : "outline"}
+              className="cursor-pointer"
+              onClick={() => onItemClick(item)}
+            >
+              {item}
+            </Badge>
+          ))}
+          {filteredItems.length === 0 && searchTerm && (
+            <p className="text-sm text-muted-foreground">No matching items found</p>
+          )}
+        </div>
+        {hasMore && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? 'Show Less' : `Show ${filteredItems.length - visibleItems.length} More...`}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface FilterState {
   inbox: boolean;
   archived: boolean;
@@ -20,6 +150,13 @@ interface TenderFiltersProps {
   types: string[]
   tenders: TenderGroup[]
   dateRange: [number, number]
+  currentFilters?: {
+    tags: string[]
+    types: string[]
+    organizations: string[]
+    dateRange: [number, number]
+    sortDirection: 'asc' | 'desc'
+  }
   onFilterChange: (filters: {
     tags: string[]
     types: string[]
@@ -29,13 +166,30 @@ interface TenderFiltersProps {
   }) => void
 }
 
-export function TenderFilters({ tags, types, tenders, dateRange, onFilterChange }: TenderFiltersProps) {
-  // Initialize with empty selections but preserve them across renders
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
-  const [selectedOrgs, setSelectedOrgs] = useState<string[]>([])
-  const [currentDateRange, setCurrentDateRange] = useState(dateRange)
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+export function TenderFilters({ 
+  tags, 
+  types, 
+  tenders, 
+  dateRange, 
+  currentFilters,
+  onFilterChange 
+}: TenderFiltersProps) {
+  // Initialize with values from currentFilters if available
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    currentFilters?.tags || []
+  )
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(
+    currentFilters?.types || []
+  )
+  const [selectedOrgs, setSelectedOrgs] = useState<string[]>(
+    currentFilters?.organizations || []
+  )
+  const [currentDateRange, setCurrentDateRange] = useState(
+    currentFilters?.dateRange || dateRange
+  )
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(
+    currentFilters?.sortDirection || 'desc'
+  )
   const [filters, setFilters] = useState<FilterState>({
     inbox: true,
     archived: true,
@@ -43,14 +197,16 @@ export function TenderFilters({ tags, types, tenders, dateRange, onFilterChange 
   });
   const [currentValue, setCurrentValue] = useState([0, 0])
 
-  // Add debug logs for incoming props (without organizations)
-  // console.log('TenderFilters props:', {
-  //   tagsLength: tags?.length || 0,
-  //   typesLength: types?.length || 0,
-  //   tendersLength: tenders?.length || 0,
-  //   dateRange,
-  //   tags: tags || []
-  // });
+  // Add an effect to update the state when currentFilters changes
+  useEffect(() => {
+    if (currentFilters) {
+      setSelectedTags(currentFilters.tags || []);
+      setSelectedTypes(currentFilters.types || []);
+      setSelectedOrgs(currentFilters.organizations || []);
+      setCurrentDateRange(currentFilters.dateRange || dateRange);
+      setSortDirection(currentFilters.sortDirection || 'desc');
+    }
+  }, [currentFilters, dateRange]);
 
   // Update currentDateRange when dateRange prop changes
   useEffect(() => {
@@ -344,77 +500,6 @@ export function TenderFilters({ tags, types, tenders, dateRange, onFilterChange 
     return parts.length > 0 ? parts.join(' | ') : ''
   }, [selectedTags, selectedOrgs, selectedTypes])
 
-  // Add this component for collapsible filter section
-  const FilterSection = ({ 
-    title, 
-    items, 
-    selectedItems, 
-    onItemClick, 
-    onSelectAll, 
-    onClear 
-  }: { 
-    title: string
-    items: string[]
-    selectedItems: string[]
-    onItemClick: (item: string) => void
-    onSelectAll: () => void
-    onClear: () => void
-  }) => {
-    const [isExpanded, setIsExpanded] = useState(false)
-    const MAX_VISIBLE_ROWS = 2
-    const ITEMS_PER_ROW = 3 // Approximate items per row
-    const visibleItems = isExpanded ? items : items.slice(0, MAX_VISIBLE_ROWS * ITEMS_PER_ROW)
-    const hasMore = items.length > MAX_VISIBLE_ROWS * ITEMS_PER_ROW
-
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-medium">{title}</h4>
-          <div className="flex gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={onSelectAll}
-            >
-              Select All
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={onClear}
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-2">
-            {visibleItems.map((item: string) => (
-              <Badge
-                key={item}
-                variant={selectedItems.includes(item) ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => onItemClick(item)}
-              >
-                {item}
-              </Badge>
-            ))}
-          </div>
-          {hasMore && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-muted-foreground"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              {isExpanded ? 'Show Less' : `Show ${items.length - visibleItems.length} More...`}
-            </Button>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   // In the render section, update the log to show selected items
   useEffect(() => {
     console.log('Current filter state:', {
@@ -425,6 +510,22 @@ export function TenderFilters({ tags, types, tenders, dateRange, onFilterChange 
       organizations: organizations.length
     });
   }, [selectedTags, selectedTypes, selectedOrgs, extractedTags, organizations]);
+
+  // Add these batch selection functions
+  const handleBatchSelectTags = (tags: string[]) => {
+    setSelectedTags(tags);
+    updateFilters({ tags });
+  };
+
+  const handleBatchSelectTypes = (types: string[]) => {
+    setSelectedTypes(types);
+    updateFilters({ types });
+  };
+
+  const handleBatchSelectOrgs = (orgs: string[]) => {
+    setSelectedOrgs(orgs);
+    updateFilters({ organizations: orgs });
+  };
 
   return (
     <div className="space-y-4">
@@ -464,6 +565,7 @@ export function TenderFilters({ tags, types, tenders, dateRange, onFilterChange 
             }}
             onSelectAll={() => handleSelectAll('organizations', organizations)}
             onClear={() => handleDeselectAll('organizations')}
+            onBatchSelect={handleBatchSelectOrgs}
           />
         </div>
       )}
@@ -484,6 +586,7 @@ export function TenderFilters({ tags, types, tenders, dateRange, onFilterChange 
             }}
             onSelectAll={() => handleSelectAll('types', types)}
             onClear={() => handleDeselectAll('types')}
+            onBatchSelect={handleBatchSelectTypes}
           />
         </div>
       )}
