@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { TenderEvent } from "@/lib/events/tender-events";
+import { TenderGroup } from "@/types/tender";
 
 interface KeywordPanelProps {
   className?: string;
@@ -45,33 +46,39 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
   const [keywordVisibility, setKeywordVisibility] = useState<Map<string, KeywordVisibilityState>>(
     new Map()
   );
+  const [searchStats, setSearchStats] = useState({
+    totalSearched: 0,
+    inDateRange: 0,
+    addedToBoard: 0
+  });
 
-  //@ Load user's keywords on mount
-  useEffect(() => {
-    async function loadKeywords() {
-      if (!user?.id) return;
+  const fetchKeywords = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const response = await fetch('/api/keywords');
+      if (!response.ok) throw new Error('Failed to fetch keywords');
+      const data = await response.json();
       
-      try {
-        const response = await fetch('/api/keywords');
-        if (!response.ok) throw new Error('Failed to fetch keywords');
-        const data = await response.json();
-        
-        console.log('Loaded keywords from API:', data);
-        setKeywords(data);
-        
-        // Set active keywords based on isActive field from database
-        const activeIds = data
-          .filter((k: Keyword) => k.isActive === true)
-          .map((k: Keyword) => k.id);
-        
-        console.log('Setting active keyword IDs:', activeIds);
-        setActiveKeywords(new Set(activeIds));
-      } catch (error) {
-        console.error('Error loading keywords:', error);
-      }
+      console.log('Loaded keywords from API:', data);
+      setKeywords(data);
+      
+      // Set active keywords based on isActive field from database
+      const activeIds = data
+        .filter((k: Keyword) => k.isActive === true)
+        .map((k: Keyword) => k.id);
+      
+      console.log('Setting active keyword IDs:', activeIds);
+      setActiveKeywords(new Set(activeIds));
+    } catch (error) {
+      console.error('Error loading keywords:', error);
     }
+  };
 
-    loadKeywords();
+  useEffect(() => {
+    if (user?.id) {
+      fetchKeywords();
+    }
   }, [user?.id]);
 
   const handleAddKeyword = async (e: React.FormEvent) => {
@@ -185,7 +192,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       }
       
       const updatedKeyword = await response.json();
-      console.log('Updated keyword from server:', updatedKeyword);
+      // console.log('Updated keyword from server:', updatedKeyword);
       
       // Update the keyword in the local state
       setKeywords(prev => 
@@ -219,103 +226,132 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
 
   const handleFetch = async () => {
     setIsFetching(true);
-    const activeKeywordTexts = keywords
-      .filter(k => activeKeywords.has(k.id))
-      .map(k => k.text);
-    
-    // Initialize progress tracking
-    setFetchProgress({
-      current: 0,
-      total: activeKeywordTexts.length
+    // Reset stats at start of search
+    setSearchStats({
+      totalSearched: 0,
+      inDateRange: 0,
+      addedToBoard: 0
     });
-    
+
     try {
+      const activeKeywordTexts = keywords
+        .filter(k => activeKeywords.has(k.id))
+        .map(k => k.text);
+
+      if (activeKeywordTexts.length === 0) {
+        toast({
+          title: "No active keywords",
+          description: "Please activate at least one keyword to search.",
+          variant: "warning"
+        });
+        return;
+      }
+
       const response = await fetch('/api/tenders/search', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keywords: activeKeywordTexts,
           dateRangeMonths
         })
       });
 
+      if (!response.ok) throw new Error('Search request failed');
+
       const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
+      if (!reader) throw new Error('No reader available');
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let processedTenders = new Set(); // Track processed tenders to avoid duplicates
 
-      const processChunk = async (chunk: string) => {
-        const lines = chunk.split('\n\n').filter(Boolean);
-        
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
         for (const line of lines) {
           if (line.startsWith('data:')) {
             try {
-              const jsonStr = line.slice(5).trim();
-              const data = JSON.parse(jsonStr);
-              
-              // Update progress when we receive a progress update
+              const data = JSON.parse(line.slice(5));
+              console.log("📥 Received data:", data);
+
               if (data.type === 'progress') {
                 setFetchProgress({
                   current: data.current,
                   total: data.total
                 });
-                continue;
+              } 
+              else if (data.type === 'complete') {
+                console.log("🏁 Search complete:", data);
+                setSearchStats(prev => ({
+                  ...prev,
+                  totalSearched: data.totalFound || 0,
+                  inDateRange: data.processedCount || 0
+                }));
+
+                // Show completion toast only after we have final stats
+                if (data.totalFound > 0 && data.processedCount === 0) {
+                  toast({
+                    title: "No Matching Tenders",
+                    description: `Found ${data.totalFound} tenders but none were within the specified date range.`,
+                    variant: "warning",
+                  });
+                } else if (data.totalFound > 0) {
+                  toast({
+                    title: "Search Complete",
+                    description: (
+                      <div className="space-y-1">
+                        <p>Total tenders searched: {data.totalFound}</p>
+                        <p>Tenders in date range: {data.processedCount}</p>
+                        <p>New tenders added: {processedTenders.size}</p>
+                      </div>
+                    ),
+                    variant: processedTenders.size > 0 ? "success" : "info",
+                  });
+                }
               }
-              
-              // Process tender data
-              if (data.tender) {
+              else if (data.tender) { // It's a tender
+                console.log("🎯 Processing tender:", data);
+                
+                // First notify parent component
                 if (onTendersFound) {
                   onTendersFound([data]);
                 }
 
-                // Regular tender data
-                console.log('📤 Dispatching tender event:', data.tender.id);
-                const event = new TenderEvent(data);
+                // Then dispatch event for other components
+                const event = new CustomEvent('tenderFound', { 
+                  detail: {
+                    ...data,
+                    tender: {
+                      ...data.tender,
+                      // Don't set isNew here, let the NotificationContext handle it
+                    }
+                  }
+                });
                 window.dispatchEvent(event);
+
+                // Update stats
+                setSearchStats(prev => ({
+                  ...prev,
+                  addedToBoard: prev.addedToBoard + 1
+                }));
               }
-            } catch (e) {
-              console.error('❌ Error parsing tender data:', e);
+            } catch (error) {
+              console.error('❌ Error processing data:', error);
             }
           }
         }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) {
-          if (buffer) {
-            await processChunk(buffer);
-          }
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        
-        const lastNewlineIndex = buffer.lastIndexOf('\n\n');
-        if (lastNewlineIndex > -1) {
-          const completeChunks = buffer.slice(0, lastNewlineIndex);
-          buffer = buffer.slice(lastNewlineIndex + 2);
-          await processChunk(completeChunks);
-        }
       }
-
-      toast({
-        title: "Search completed",
-        description: "All tenders have been processed",
-        variant: "success",
-      });
-
     } catch (error) {
       console.error('Error fetching tenders:', error);
       toast({
         title: "Error",
         description: "Failed to fetch tenders. Please try again.",
         variant: "destructive",
-        duration: 3000,
       });
     } finally {
       setIsFetching(false);
@@ -365,19 +401,122 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
         title: toastTitle,
         description: toastDescription,
         duration: 2000,
+        variant: "info",
       });
       
       return newVisibility;
     });
   };
 
+  const handleCloseAllKeywords = async () => {
+    // Show confirmation dialog
+    if (!confirm("Are you sure you want to deactivate all keywords?")) {
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Update each active keyword to inactive
+      const promises = keywords
+        .filter(k => k.isActive)
+        .map(keyword => 
+          fetch(`/api/keywords/${keyword.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ isActive: false }),
+          })
+        );
+      
+      await Promise.all(promises);
+      
+      // Refresh the keywords list
+      await fetchKeywords();
+      
+      toast({
+        title: "Keywords deactivated",
+        description: "All keywords have been deactivated successfully.",
+      });
+    } catch (error) {
+      console.error("Failed to deactivate keywords:", error);
+      toast({
+        title: "Error",
+        description: "Failed to deactivate keywords. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleActivateAllKeywords = async () => {
+    // Show confirmation dialog
+    if (!confirm("Are you sure you want to activate all keywords?")) {
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Update each inactive keyword to active
+      const promises = keywords
+        .filter(k => !k.isActive)
+        .map(keyword => 
+          fetch(`/api/keywords/${keyword.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ isActive: true }),
+          })
+        );
+      
+      await Promise.all(promises);
+      
+      // Refresh the keywords list
+      await fetchKeywords();
+      
+      toast({
+        title: "Keywords activated",
+        description: "All keywords have been activated successfully.",
+      });
+    } catch (error) {
+      console.error("Failed to activate keywords:", error);
+      toast({
+        title: "Error",
+        description: "Failed to activate keywords. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className={cn(
       "p-4 border rounded-lg bg-white shadow-sm sticky top-4", 
-      "h-[85vh] flex flex-col",
+      "h-[87vh] flex flex-col",
       className
     )}>
-      <h2 className="text-lg font-semibold mb-4">Keywords</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">Keywords</h2>
+        {keywords.length > 0 && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={keywords.every(k => k.isActive) 
+              ? handleCloseAllKeywords 
+              : handleActivateAllKeywords}
+            disabled={isLoading}
+          >
+            {keywords.every(k => k.isActive) 
+              ? "Deactivate All" 
+              : "Activate All"}
+          </Button>
+        )}
+      </div>
       
       {/* Keyword input form */}
       <form onSubmit={handleAddKeyword} className="flex gap-2 mb-4">
@@ -422,7 +561,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                 />
                 <span
                   className={cn(
-                    "text-sm font-medium max-w-[170px] truncate",
+                    "text-sm font-medium w-[155px] truncate",
                     !activeKeywords.has(keyword.id) && "text-muted-foreground"
                   )}
                 >

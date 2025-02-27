@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from "lucide-react"
+import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ToastVariant } from "./use-toast"
 
@@ -26,27 +26,15 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  `group pointer-events-auto relative 
-  lex w-full items-center justify-between 
-  space-x-4 overflow-hidden rounded-md 
-  border p-5 pr-8 shadow-lg transition-all
-  data-[swipe=cancel]:translate-x-0 
-  data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] 
-  data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]
-  data-[swipe=move]:transition-none data-[state=open]:animate-in 
-  data-[state=closed]:animate-out data-[swipe=end]:animate-out 
-  data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full 
-  data-[state=open]:slide-in-from-left-full 
-  data-[state=open]:sm:slide-in-from-right-full`,
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-right-full",
   {
     variants: {
       variant: {
-        default: "border-border bg-background text-foreground",
-        destructive:
-          "destructive group border-destructive bg-destructive text-destructive-foreground",
-        success: "border-green-500 bg-green-500 text-white",
-        info: "border-blue-500 bg-blue-500 text-white",
-        warning: "border-yellow-500 bg-yellow-500 text-white",
+        default: "border bg-background",
+        success: "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950",
+        destructive: "destructive border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950",
+        warning: "border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950",
+        info: "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950",
       },
     },
     defaultVariants: {
@@ -69,32 +57,33 @@ export interface ToastActionElement {
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-    VariantProps<typeof toastVariants> & {
-      variant?: ToastVariant;
-    }
+    VariantProps<typeof toastVariants>
 >(({ className, variant, ...props }, ref) => {
-  // Define icons based on variant
-  const IconComponent = React.useMemo(() => {
-    switch (variant) {
-      case 'success':
-        return <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />;
-      case 'destructive':
-        return <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />;
-      case 'info':
-        return <Info className="h-5 w-5 mr-2 flex-shrink-0" />;
-      case 'warning':
-        return <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />;
-      default:
-        return null;
-    }
-  }, [variant]);
+  const IconComponent = {
+    default: Info,
+    success: CheckCircle2,
+    destructive: X,
+    warning: AlertTriangle,
+    info: Info,
+  }[variant || 'default']
 
   return (
     <ToastPrimitives.Root
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
       {...props}
-    />
+    >
+      <div className="flex items-start gap-4">
+        <IconComponent className={cn(
+          "h-5 w-5",
+          variant === 'success' && "text-green-600",
+          variant === 'destructive' && "text-red-600",
+          variant === 'warning' && "text-yellow-600",
+          variant === 'info' && "text-blue-600",
+        )} />
+        {props.children}
+      </div>
+    </ToastPrimitives.Root>
   )
 })
 Toast.displayName = ToastPrimitives.Root.displayName
@@ -130,9 +119,9 @@ const ToastTitle = React.forwardRef<
   const IconComponent = React.useMemo(() => {
     switch (variant) {
       case 'success':
-        return <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />;
+        return <CheckCircle2 className="h-5 w-5 mr-2 flex-shrink-0" />;
       case 'destructive':
-        return <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />;
+        return <X className="h-5 w-5 mr-2 flex-shrink-0" />;
       case 'info':
         return <Info className="h-5 w-5 mr-2 flex-shrink-0" />;
       case 'warning':

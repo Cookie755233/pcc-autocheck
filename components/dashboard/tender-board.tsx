@@ -21,6 +21,33 @@ import { useToast } from "@/components/ui/use-toast"
 import { TenderEvent } from "@/lib/events/tender-events"
 import { Badge } from "@/components/ui/badge"
 import { ExportButton } from "@/components/dashboard/export-button"
+import { useNotifications } from "@/contexts/notification-context"
+
+// Create a custom ArchiveAll icon component
+const ArchiveAll = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <rect x="2" y="4" width="20" height="5" rx="2" />
+    <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+    <path d="m9 14 3 3 3-3" />
+    <path d="M12 12v5" />
+    <path d="M3 3v2" />
+    <path d="M7 3v2" />
+    <path d="M11 3v2" />
+    <path d="M15 3v2" />
+    <path d="M19 3v2" />
+  </svg>
+);
 
 // Add the KeywordVisibilityState enum at the top of the file
 enum KeywordVisibilityState {
@@ -191,69 +218,28 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
     }
   }, [localTenders, processedTenders, toast]);
 
+  const { addNewTender, notifications, isNew } = useNotifications()
+
   useEffect(() => {
-    const handleNewTender = (event: TenderEvent) => {
-      const newTender = event.detail;
-      console.log('📥 Received new tender data:', {
-        id: newTender.tender.id,
-        versions: newTender.versions?.length,
-        firstVersion: newTender.versions?.[0]
-      });
+    function handleTenderFound(event: CustomEvent) {
+      console.log("📥 TenderBoard received tender:", event.detail);
       
+      // Add the new tender to local state
       setLocalTenders(prev => {
-        const exists = prev.some(t => t.tender.id === newTender.tender.id);
-        if (exists) {
-          console.log('⚠️ Tender already exists:', newTender.tender.id);
+        const newTender = event.detail;
+        // Check if tender already exists
+        if (prev.some(t => t.tender.id === newTender.tender.id)) {
           return prev;
         }
-        
-        // Construct proper tender object
-        const tenderGroup = {
-          tender: {
-            ...newTender.tender,
-            id: newTender.tender.id,
-            date: Number(newTender.versions[0]?.date || Date.now()),
-            title: newTender.versions[0]?.data?.brief?.title || 'No title',
-            unit_id: newTender.tender.id.split('unit_id=')[1]?.split('&')[0],
-            job_number: newTender.tender.id.split('job_number=')[1],
-            isArchived: false,
-            isHighlighted: false,
-            brief: newTender.versions[0]?.data?.brief || {} // Add brief data
-          },
-          versions: newTender.versions.map(v => ({
-            ...v,
-            data: {
-              ...v.data,
-              brief: v.data?.brief || {}
-            }
-          })),
-          relatedTenders: []
-        };
-
-        console.log('✅ Adding new tender to board:', tenderGroup);
-        setProcessedTenders(count => count + 1);
-        return [tenderGroup, ...prev];
+        return [...prev, newTender];
       });
-    };
+    }
 
-    const handleSearchComplete = (event: CustomEvent) => {
-      toast({
-        title: "Search Complete",
-        description: `Found ${processedTenders} new tenders`,
-        variant: "success",
-        duration: 3000,
-      });
-      setProcessedTenders(0); // Reset counter
-    };
+    // Add event listener
+    window.addEventListener('tenderFound', handleTenderFound as EventListener);
 
-    console.log('🎯 Setting up tender event listeners');
-    window.addEventListener('newTenderFound', handleNewTender);
-    window.addEventListener('searchComplete', handleSearchComplete);
-    
     return () => {
-      console.log('🧹 Cleaning up tender event listeners');
-      window.removeEventListener('newTenderFound', handleNewTender);
-      window.removeEventListener('searchComplete', handleSearchComplete);
+      window.removeEventListener('tenderFound', handleTenderFound as EventListener);
     };
   }, []);
 
@@ -297,8 +283,8 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
       return [];
     }
     
-    console.log(`Starting filtering with ${boardFilteredTenders.length} tenders`);
-    console.log('Current filters:', filters);
+    // console.log(`Starting filtering with ${boardFilteredTenders.length} tenders`);
+    // console.log('Current filters:', filters);
     
     const result = boardFilteredTenders.filter(group => {
       const tender = group.tender;
@@ -811,8 +797,81 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
   const totalInboxCount = inboxCount;
   const totalArchivedCount = archivedCount;
 
+  // Add this function to handle clearing the "new" status
+  const clearNewStatus = (tenderId: string) => {
+    setLocalTenders(prev => 
+      prev.map(group => {
+        if (group.tender.id === tenderId) {
+          return {
+            ...group,
+            tender: {
+              ...group.tender,
+              isNew: false
+            }
+          };
+        }
+        return group;
+      })
+    );
+  };
+
+  // Add an effect to listen for the URL parameter
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const highlightId = url.searchParams.get('highlight');
+    
+    if (highlightId) {
+      // Clear the "new" status for this tender
+      clearNewStatus(highlightId);
+      
+      // Scroll to the highlighted tender
+      const element = document.getElementById(`tender-${highlightId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Flash effect to draw attention
+        element.classList.add('flash-highlight');
+        setTimeout(() => {
+          element.classList.remove('flash-highlight');
+        }, 2000);
+      }
+    }
+  }, []);
+
+  const handleNewStatusChange = (tenderId: string, isNew: boolean) => {
+    setLocalTenders(prev => 
+      prev.map(group => {
+        if (group.tender.id === tenderId) {
+          return {
+            ...group,
+            tender: {
+              ...group.tender,
+              isNew: isNew
+            }
+          };
+        }
+        return group;
+      })
+    );
+  };
+
+  // Listen for read status changes
+  useEffect(() => {
+    const handleReadStatusChange = (event: CustomEvent) => {
+      const { tenderId, isRead } = event.detail;
+      if (isRead) {
+        handleNewStatusChange(tenderId, false);
+      }
+    };
+
+    window.addEventListener('tenderReadStatusChanged', handleReadStatusChange as EventListener);
+    return () => {
+      window.removeEventListener('tenderReadStatusChanged', handleReadStatusChange as EventListener);
+    };
+  }, []);
+
   return (
-    <div className={cn("h-[85vh] rounded-lg shadow-sm", className)}>
+    <div className={cn("h-[87vh] rounded-lg shadow-sm", className)}>
       <div className="flex flex-col h-full">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
@@ -885,6 +944,35 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                       </button>
                     )}
                   </div>
+                  
+                  {/* Archive All Button - Only show for inbox tab */}
+                  {activeTab === 'inbox' && filteredTenders.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2 h-9"
+                      onClick={() => {
+                        // Confirm before archiving all
+                        if (window.confirm(`Archive all ${filteredTenders.length} visible tenders?`)) {
+                          // Archive all filtered tenders
+                          filteredTenders.forEach(group => {
+                            if (!group.tender.isArchived && !group.tender.isHighlighted) {
+                              handleArchive(group.tender.id, true);
+                            }
+                          });
+                          
+                          toast({
+                            title: "Bulk Archive",
+                            description: `${filteredTenders.length} tenders have been archived`,
+                          });
+                        }
+                      }}
+                    >
+                      <ArchiveAll className="h-4 w-4" />
+                      <span className="text-sm">Archive All</span>
+                    </Button>
+                  )}
+                  
                   <ExportButton tenders={filteredTenders} />
                 </div>
               </div>
@@ -995,6 +1083,7 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                                       relatedTenders={group.relatedTenders}
                                       onArchive={handleArchive}
                                       onHighlight={handleHighlight}
+                                      isNew={isNew(group.tender.id)}
                                     />
                                   </motion.div>
                                 ))}

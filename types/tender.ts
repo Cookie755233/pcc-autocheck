@@ -23,53 +23,42 @@ export interface APIResponse {
 }
 
 export interface Tender {
-  id: string
-  unit_id: string
-  job_number: string
-  records?: TenderRecord[]
-  [key: string]: any
+  id: string;
+  unit_id: string;
+  job_number: string;
+  date: number;
+  title: string;
+  isArchived: boolean;
+  isHighlighted: boolean;
+  isNew?: boolean;
+  brief?: {
+    title?: string;
+    type?: string;
+    [key: string]: any;
+  };
 }
 
 export interface TenderGroup {
   tender: Tender;
   versions: TenderVersion[];
-  isArchived: boolean;
-  relatedTenders?: Tender[];
+  relatedTenders: Tender[];
 }
 
 export interface TenderVersion {
-  date: number;
+  date: string | number;
   type: string;
-  enrichedData: {
-    url?: string;
-    unit_id?: string;
-    unit_name?: string;
-    job_number?: string;
+  data: {
     brief?: {
-      type: string;
-      title: string;
-      category?: string;
-      companies?: {
-        ids: string[];
-        names: string[];
-        id_key: Record<string, string[]>;
-        name_key: Record<string, string[]>;
-      };
+      title?: string;
+      type?: string;
+      [key: string]: any;
     };
-    detail?: any;
-    awardData?: {
-      totalAmount?: string;
-      isPublic?: boolean;
-      basePrice?: string;
-      awardDate?: string;
-      winner?: string;
-      winningBid?: string;
-    };
-    failureData?: {
-      reason?: string;
-      failureDate?: string;
-      nextAction?: string;
-    };
+    [key: string]: any;
+  };
+  enrichedData?: {
+    awardData?: any;
+    failureData?: any;
+    [key: string]: any;
   };
 }
 

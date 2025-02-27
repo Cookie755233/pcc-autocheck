@@ -35,7 +35,7 @@ export async function PATCH(
 
     const keyword = await updateKeyword(userId, params.id, updateData)
     
-    console.log('Updated keyword:', keyword);
+    // console.log('Updated keyword:', keyword);
     return NextResponse.json(keyword)
   } catch (error) {
     console.error('Error updating keyword:', error)

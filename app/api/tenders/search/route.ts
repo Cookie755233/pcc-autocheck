@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           let processedCount = 0;
+          let totalFound = 0;
+
           for (let i = 0; i < keywords.length; i++) {
             const keyword = keywords[i];
             
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
             
             console.log(`\n🔍 Processing keyword: "${keyword}"`);
             const tenders = await searchTenders(keyword);
+            totalFound += tenders.length;
             
             for (const tender of tenders) {
               const tenderId = `unit_id=${tender.unit_id}&job_number=${tender.job_number}`;
@@ -105,16 +108,16 @@ export async function POST(req: NextRequest) {
                   // Parse the YYYYMMDD format date
                   const dateStr = record.date.toString();
                   const year = parseInt(dateStr.substring(0, 4));
-                  const month = parseInt(dateStr.substring(4, 6)) - 1; // JS months are 0-indexed
+                  const month = parseInt(dateStr.substring(4, 6)) - 1;
                   const day = parseInt(dateStr.substring(6, 8));
                   
                   const recordDate = new Date(year, month, day);
                   const recordTimestamp = recordDate.getTime();
                   
-                  const isRecent = recordTimestamp >= thresholdTimestamp;
+                  const isRecent = recordTimestamp >= thresholdTimestamp && recordTimestamp <= now.getTime();
                   console.log(`Tender ${tenderId} version date: ${recordDate.toISOString()} (${record.date}) - Within range: ${isRecent}`);
                   return isRecent;
-                })
+                });
                 
                 if (recentVersions.length === 0) {
                   console.log(`Tender ${tenderId} filtered out - no versions within date range`)
@@ -240,7 +243,7 @@ export async function POST(req: NextRequest) {
                   
                   // Stream the data
                   const message = `data: ${JSON.stringify(tenderData)}\n\n`;
-                  console.log(`📤 Streaming tender: ${tenderId}`, tenderData);
+                  // console.log(`📤 Streaming tender: ${tenderId}`, tenderData);
                   controller.enqueue(new TextEncoder().encode(message));
                 } else {
                   console.log(`⚠️ No saved tender found for: ${tenderId}`);
@@ -252,10 +255,14 @@ export async function POST(req: NextRequest) {
           }
           
           console.log('\n✨ Finished processing all keywords');
-          // Send completion message
+          // Send completion message with total found and processed counts
           controller.enqueue(
             new TextEncoder().encode(
-              `data: {"type":"complete","count":${processedCount}}\n\n`
+              `data: ${JSON.stringify({
+                type: "complete",
+                totalFound,
+                processedCount
+              })}\n\n`
             )
           );
           controller.close();

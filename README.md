@@ -139,6 +139,18 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- [g0v Taiwan](https://g0v.tw/) for providing the procurement data API
+- [政府採購網 API by Ronny Wang](https://pcc.g0v.ronny.tw/) - The core API powering this project's tender data
+  - API Endpoint: https://pcc.g0v.ronny.tw/api/
+  - Source Code: [Backend API](https://github.com/ronnywang/pcc.g0v.ronny.tw) | [Frontend Viewer](https://github.com/ronnywang/pcc-viewer)
+  - Data sourced from [政府電子採購網](https://web.pcc.gov.tw/)
+
+
 - [Shadcn UI](https://ui.shadcn.com/) for the component library
 - [Clerk](https://clerk.dev/) for authentication
+
+## Usage Rights:
+1. Content published under PCC's name can be reproduced, broadcast, or transmitted within reasonable scope with proper attribution
+2. Information can be reproduced for personal or non-profit family use
+3. Citations allowed for reporting, commentary, teaching, research, or other legitimate purposes within reasonable scope with proper attribution
+4. Other fair use cases as per Copyright Act Articles 44-65
+5. Commercial use requires accessing official open data sets from the Government e-Procurement System

@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "@/components/ui/use-toast"
 import { getTenderLayout } from './tender-layouts/tender-layout'
 import { BiddingLayout, AwardedLayout, FailedBidLayout, DeliveryLayout } from './tender-layouts'
+import { useNotifications } from "@/contexts/notification-context"
 
 
 //@ Format YYYYMMDD to date string
@@ -25,35 +26,12 @@ function formatTenderDate(dateNum: number): string {
 }
 
 interface TenderCardProps {
-  tender: {
-    id: string;
-    unit_id: string;
-    job_number: string;
-    date: number;
-    title: string;
-    isArchived: boolean;
-    isHighlighted: boolean;
-    brief?: {
-      title?: string;
-      type?: string;
-      [key: string]: any;
-    };
-  };
-  versions: Array<{
-    date: string;
-    type: string;
-    data: {
-      brief: {
-        title?: string;
-        type?: string;
-        [key: string]: any;
-      };
-      [key: string]: any;
-    };
-  }>;
-  relatedTenders?: any[];
-  onArchive?: (tenderId: string, isArchived: boolean) => void;
-  onHighlight?: (tenderId: string, isHighlighted: boolean) => void;
+  tender: Tender
+  versions: TenderVersion[]
+  relatedTenders?: Tender[]
+  onArchive?: (tenderId: string, isArchived: boolean) => void
+  onHighlight?: (tenderId: string, isHighlighted: boolean) => void
+  isNew?: boolean
 }
 
 interface TenderVersion {
@@ -121,12 +99,14 @@ function findMatchingRecord(details: any, currentTender: Tender) {
 }
 
 export function TenderCard({ 
-  tender, 
-  onArchive, 
+  tender,
+  versions,
+  relatedTenders,
+  onArchive,
   onHighlight,
-  relatedTenders = [], 
-  versions = []
+  isNew = false
 }: TenderCardProps) {
+  const { markAsRead } = useNotifications();
   const [isOpen, setIsOpen] = useState(false)
   const [details, setDetails] = useState<Record<number, any>>({}) // Store details for each tender version
   const [isLoading, setIsLoading] = useState(false)
@@ -323,6 +303,13 @@ export function TenderCard({
   const awardData = currentVersion.enrichedData?.awardData;
   const failureData = currentVersion.enrichedData?.failureData;
 
+  const handleCardOpen = () => {
+    if (isNew) {
+      markAsRead(tender.id);
+    }
+    handleDialogOpen(true);
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -332,115 +319,30 @@ export function TenderCard({
       >
         <Card 
           className={cn(
-            "group relative cursor-pointer w-full h-[280px] ",
+            "group relative cursor-pointer w-full h-[280px]",
             "hover:shadow-md transition-all duration-200",
             (isArchiving || isRemoving) && "animate-fade-out",
-            tender.isHighlighted && "shadow-[0px_0px_8px_2px_rgba(250,204,21,0.5)] border-yellow-400"
+            tender.isHighlighted && "shadow-[0px_0px_8px_2px_rgba(250,204,21,0.5)] border-yellow-400",
+            tender.isArchived && "opacity-75",
+            isNew && "shadow-[0px_0px_12px_3px_rgba(59,130,246,0.3)] border-blue-400/50"
           )}
-          onClick={() => handleDialogOpen(true)}
+          onClick={handleCardOpen}
           data-tender-id={tender.job_number}
         >
           {versions.length > 1 && (
             <NotificationBadge count={versions.length} />
           )}
           <CardHeader className="flex-grow">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex gap-2 mb-2 items-center">
-                  {tender.tags?.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {tender.tags.map((tag: string) => {
-                        const tagColor = stringToColor(tag, 0.8, true);
-                        return (
-                          <Badge 
-                            key={tag} 
-                            variant="outline"
-                            className="text-[11px] text-white px-2 py-0.5 hover:bg-opacity-90 transition-colors"
-                            style={{ 
-                              backgroundColor: tagColor,
-                              boxShadow: '2px 2px 2px 0px rgba(0,0,0,0.3)',
-                              maxWidth: '90px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              display: 'inline-block',
-                              paddingLeft: '8px',
-                              paddingRight: '8px'
-                            }}
-                            title={tag}
-                          >
-                            # {tag}
-                          </Badge>
-                        );
-                      })}
-                    </div>
-                  )}
+            <div className="flex-1 min-w-0">
+              {isNew && (
+                <div className="text-blue-500 text-xs font-medium mb-2 flex items-center">
+                  <span className="h-2 w-2 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>
+                  New
                 </div>
-                <CardTitle className="text-lg line-clamp-2 break-all">
-                  {currentVersion.brief?.title}
-                </CardTitle>
-                {currentVersion.brief?.content && (
-                  <CardDescription className="line-clamp-2 break-all">
-                    {currentVersion.brief?.content}
-                  </CardDescription>
-                )}
-              </div>
-              <div className="absolute bottom-2 right-2 flex gap-2">
-                {/* Only show highlight button for non-archived tenders */}
-                {onHighlight && !tender.isArchived && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="transition-opacity duration-200"
-                    onClick={handleHighlight}
-                    disabled={isHighlighting}
-                    title={tender.isHighlighted ? "Remove Highlight" : "Highlight Tender"}
-                  >
-                    <Star 
-                      className={cn(
-                        "h-4 w-4", 
-                        tender.isHighlighted ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground",
-                        isHighlighting && "animate-pulse"
-                      )} 
-                    />
-                  </Button>
-                )}
-                
-                {onArchive && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="transition-opacity duration-200"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log('Archive/Revert button clicked');
-                      console.log('Current tender isArchived:', tender.isArchived);
-                      handleArchive(e);
-                    }}
-                    disabled={isArchiving || isRemoving || tender.isHighlighted}
-                    title={
-                      tender.isHighlighted 
-                        ? "Cannot archive highlighted tenders" 
-                        : (tender.isArchived ? "Revert to Inbox" : "Archive Tender")
-                    }
-                  >
-                    {tender.isArchived ? (
-                      <RotateCcw className={cn(
-                        "h-4 w-4", 
-                        (isArchiving || isRemoving) && "animate-bounce",
-                        tender.isHighlighted && "opacity-50"
-                      )} />
-                    ) : (
-                      <Archive className={cn(
-                        "h-4 w-4", 
-                        (isArchiving || isRemoving) && "animate-bounce",
-                        tender.isHighlighted && "opacity-50"
-                      )} />
-                    )}
-                  </Button>
-                )}
-              </div>
+              )}
+              <CardTitle className="text-base font-medium line-clamp-2 mb-2">
+                {tender.title}
+              </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
@@ -474,6 +376,88 @@ export function TenderCard({
               </div>
             )}
           </CardContent>
+
+          {/* Bottom section with tags and action buttons - now positioned absolutely */}
+          <div className="absolute bottom-2 left-4 right-4 flex items-center justify-between">
+            {/* Tags on bottom left */}
+            <div className="flex flex-wrap gap-2 flex-1 pb-1">
+              {tender.tags?.length > 0 && tender.tags.map((tag: string) => {
+                const tagColor = stringToColor(tag, 0.8, true);
+                return (
+                  <Badge 
+                    key={tag} 
+                    variant="outline"
+                    className="text-[10px] text-white px-2 py-0.5 hover:bg-opacity-90 transition-colors"
+                    style={{ 
+                      backgroundColor: tagColor,
+                      boxShadow: '2px 2px 2px 0px rgba(0,0,0,0.3)',
+                      maxWidth: '90px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-block',
+                      paddingLeft: '8px',
+                      paddingRight: '8px'
+                    }}
+                    title={tag}
+                  >
+                    # {tag}
+                  </Badge>
+                );
+              })}
+            </div>
+
+            {/* Action buttons on bottom right */}
+            <div className="flex gap-2">
+              {/* Only show highlight button for non-archived tenders */}
+              {onHighlight && !tender.isArchived && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="transition-opacity duration-200"
+                  onClick={handleHighlight}
+                  disabled={isHighlighting}
+                  title={tender.isHighlighted ? "Remove Highlight" : "Highlight Tender"}
+                >
+                  <Star 
+                    className={cn(
+                      "h-4 w-4", 
+                      tender.isHighlighted ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground",
+                      isHighlighting && "animate-pulse"
+                    )} 
+                  />
+                </Button>
+              )}
+              {onArchive && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="transition-opacity duration-200"
+                  onClick={handleArchive}
+                  disabled={isArchiving || isRemoving || tender.isHighlighted}
+                  title={
+                    tender.isHighlighted 
+                      ? "Cannot archive highlighted tenders" 
+                      : (tender.isArchived ? "Revert to Inbox" : "Archive Tender")
+                  }
+                >
+                  {tender.isArchived ? (
+                    <RotateCcw className={cn(
+                      "h-4 w-4", 
+                      (isArchiving || isRemoving) && "animate-bounce",
+                      tender.isHighlighted && "opacity-50"
+                    )} />
+                  ) : (
+                    <Archive className={cn(
+                      "h-4 w-4", 
+                      (isArchiving || isRemoving) && "animate-bounce",
+                      tender.isHighlighted && "opacity-50"
+                    )} />
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         </Card>
 
         <Dialog open={isOpen} onOpenChange={handleDialogOpen}>
@@ -482,7 +466,55 @@ export function TenderCard({
             <div className="flex flex-col h-full">
               {/* Title and Version History */}
               <div>
-                <DialogTitle className="text-xl">{currentVersion.brief?.title}</DialogTitle>
+                <div className="flex justify-between items-start">
+                  <DialogTitle className="text-xl">{currentVersion.brief?.title}</DialogTitle>
+                  
+                  {/* Add action buttons */}
+                  <div className="flex gap-2 pr-4">
+                    {/* Only show highlight button for non-archived tenders */}
+                    {onHighlight && !tender.isArchived && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                        onClick={(e) => handleHighlight(e)}
+                        disabled={isHighlighting}
+                      >
+                        <Star 
+                          className={cn(
+                            "h-4 w-4", 
+                            tender.isHighlighted ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground",
+                            isHighlighting && "animate-pulse"
+                          )} 
+                        />
+                        <span>{tender.isHighlighted ? "Remove Highlight" : "Highlight"}</span>
+                      </Button>
+                    )}
+                    
+                    {onArchive && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                        onClick={(e) => handleArchive(e)}
+                        disabled={isArchiving || isRemoving || tender.isHighlighted}
+                      >
+                        {tender.isArchived ? (
+                          <>
+                            <RotateCcw className="h-4 w-4" />
+                            <span>Revert to Inbox</span>
+                          </>
+                        ) : (
+                          <>
+                            <Archive className="h-4 w-4" />
+                            <span>Archive</span>
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
                 {versions.length > 0 && (
                   <div className="relative mt-4">
                     <div className="flex items-center gap-2">
