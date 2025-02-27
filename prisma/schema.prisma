@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id
+  email       String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  keywords    Keyword[]
+  tenderViews TenderView[]
+
+  @@map("users")
+}
+
+model Keyword {
+  id        String   @id @default(cuid())
+  text      String
+  userId    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, text])
+  @@map("keywords")
+}
+
+model Tender {
+  id        String          @id
+  tags      String[]        @default([])
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  versions  TenderVersion[]
+  views     TenderView[]
+
+  @@map("tenders")
+}
+
+model TenderVersion {
+  id        String   @id @default(cuid())
+  tenderId  String
+  date      BigInt   // Using BigInt for timestamp (getTime())
+  type      String   // Tender type
+  data      Json     // Full tender data
+  createdAt DateTime @default(now())
+  tender    Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@unique([tenderId, date, type])
+  @@map("tender_versions")
+}
+
+model TenderView {
+  id         String   @id @default(cuid())
+  userId     String
+  tenderId   String
+  isArchived Boolean  @default(false)
+  isHighlighted Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tender     Tender   @relation(fields: [tenderId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, tenderId])
+  @@map("tender_views")
+}

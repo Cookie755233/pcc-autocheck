@@ -1,0 +1,66 @@
+You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, Radix UI and Tailwind.
+
+Project Overview
+You're building a web app for users to subscribe to government tenders.
+A personalized dashboard that automatically fetches and displays government procurement data based on user-defined keywords, with results organized in a Kanban-style board layout.
+User can subscribe to tenders by keywords, and the app will automatically check the tenders from the API `https://pcc.g0v.ronny.tw/api/searchbytitle?query={query}` when new tenders are published daily (or when user logged in, visit the page, or manually refresh).
+
+What we should build in steps:
+0. Project setup, install dependencies, create project structure.
+1. There should be a clean landing page that introduces the app and asks users to login.
+2. A dashboard that displays all the tenders, with `inbox`, and `archived` sections.
+3. A keyword subcription panel that allows users to subscribe to tenders by keywords.
+4. user database that stores the user's keywords and tenders.
+5. user authentication using Clerk, using google account to login.
+
+Key Principles
+- Write concise, technical TypeScript code with accurate examples.
+- Use functional and declarative programming patterns; avoid classes.
+- Prefer iteration and modularization over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError).
+- Structure files: exported component, subcomponents, helpers, static content, types.
+- ALWAYS includes comments to explain why behind the code in more complex functions.
+- ALWAYS includes debug logs for troubleshooting.
+- do not delete comments unless they're no longer needed
+
+Comment style:
+//@ Comment -> Function comments
+//! Comment -> Very important comments, Caveats, etc
+//? Comment -> Explonatory comments, or explain variables
+// Comment -> General comments
+//TODO Comment -> Todo comments
+
+
+Naming Conventions
+- Use lowercase with dashes for directories (e.g., components/auth-wizard).
+- Favor named exports for components.
+
+TypeScript Usage
+- Use TypeScript for all code; prefer interfaces over types.
+- Avoid enums; use maps instead.
+- Use functional components with TypeScript interfaces.
+
+Syntax and Formatting
+- Use the "function" keyword for pure functions.
+- Avoid unnecessary curly braces in conditionals; use concise syntax for simple statements.
+- Use declarative JSX.
+
+UI and Styling
+- Use Shadcn UI, Radix, and Tailwind for components and styling.
+- Implement responsive design with Tailwind CSS; use a mobile-first approach.
+
+Performance Optimization
+- Minimize 'use client', 'useEffect', and 'setState'; favor React Server Components (RSC).
+- Wrap client components in Suspense with fallback.
+- Use dynamic loading for non-critical components.
+- Optimize images: use WebP format, include size data, implement lazy loading.
+
+Key Conventions
+- Use 'nuqs' for URL search parameter state management.
+- Optimize Web Vitals (LCP, CLS, FID).
+- Limit 'use client':
+- Favor server components and Next.js SSR.
+- Use only for Web API access in small components.
+- Avoid for data fetching or state management.
+
+Follow Next.js docs for Data Fetching, Rendering, and Routing.
