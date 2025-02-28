@@ -181,22 +181,18 @@
 @keyframes slide-in-from-right {
   from {
     transform: translateX(100%);
-    opacity: 0;
   }
   to {
     transform: translateX(0);
-    opacity: 1;
   }
 }
 
 @keyframes slide-out-to-right {
   from {
     transform: translateX(0);
-    opacity: 1;
   }
   to {
     transform: translateX(100%);
-    opacity: 0;
   }
 }
 
@@ -210,11 +206,11 @@
 }
 
 .data-[state=open]:animate-in {
-  animation: slide-in-from-right 0.3s ease-out, fade-in 0.2s ease-out;
+  animation: slide-in-from-right 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .data-[state=closed]:animate-out {
-  animation: slide-out-to-right 0.2s ease-in;
+  animation: slide-out-to-right 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* Toast container styles */
@@ -247,4 +243,69 @@
 .toast-root:hover {
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
+}
+
+/* Add these CSS rules */
+html {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+section {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+@layer components {
+  .dialog-content-right {
+    animation: slide-in-right 0.3s ease-out;
+  }
+
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+}
+
+.slide-in-from-right {
+  animation: slide-in-from-right 0.3s ease-out;
+}
+
+.slide-out-to-right {
+  animation: slide-out-to-right 0.3s ease-in;
+}
+
+.dialog-content-right[data-state="open"] {
+  animation: slide-in-from-right 0.3s ease-out;
+}
+
+.dialog-content-right[data-state="closed"] {
+  animation: slide-out-to-right 0.3s ease-in;
+}
+
+/* Override dialog positioning and animation */
+.dialog-content {
+  position: fixed !important; /* Override any other positioning */
+  right: 0 !important;
+  top: 0 !important;
+  margin: 0 !important;
+  transform: translateX(100%);
+}
+
+/* Override dialog overlay - reduce dimming */
+[data-overlay-container] [data-radix-popper-content-wrapper] {
+  background-color: rgba(0, 0, 0, 0.2) !important; /* Much lighter dimming */
+}
+
+/* Ensure dialog animations work properly */
+.dialog-content[data-state="open"] {
+  animation: slide-in-from-right 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.dialog-content[data-state="closed"] {
+  animation: slide-out-to-right 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }

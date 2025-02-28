@@ -561,7 +561,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                 />
                 <span
                   className={cn(
-                    "text-sm font-medium w-[155px] truncate",
+                    "text-sm font-medium w-[140px] truncate",
                     !activeKeywords.has(keyword.id) && "text-muted-foreground"
                   )}
                 >

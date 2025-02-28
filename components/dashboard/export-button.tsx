@@ -710,8 +710,8 @@ export function ExportButton({ tenders }: ExportButtonProps) {
       {/* Version section */}
       <rect x="30" y="250" width="340" height="80" rx="4" fill="#f8fafc" stroke="#e2e8f0" />
       <text x="50" y="275" fontFamily="Arial" fontSize="14" fontWeight="bold" fill="#1e293b">版本資訊</text>
-      <text x="50" y="295" fontFamily="Arial" fontSize="12" fill="#334155"><tspan fontWeight="bold">類型:</tspan> 招標公告</text>
-      <text x="50" y="315" fontFamily="Arial" fontSize="12" fill="#334155"><tspan fontWeight="bold">截止日期:</tspan> 2025/02/25</text>
+      <text x="50" y="295" fontFamily="Arial" fontSize="12" fill="#334155"><tspan fontWeight="bold">類型:</tspan>ＯＯＯＯ</text>
+      <text x="50" y="315" fontFamily="Arial" fontSize="12" fill="#334155"><tspan fontWeight="bold">截止日期:</tspan>ＯＯＯ/ＯＯＯＯ</text>
       
       {/* Footer */}
       <text x="200" y="480" fontFamily="Arial" fontSize="10" fill="#64748b" textAnchor="middle">Page 1 of 1</text>

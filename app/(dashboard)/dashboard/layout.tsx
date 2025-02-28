@@ -4,9 +4,9 @@ import * as React from "react"
 import { UserButton } from "@clerk/nextjs"
 import { ModeToggle } from "@/components/ui/mode-toggle"
 import Link from "next/link"
-import { Bell, Check } from "lucide-react"
+import { Bell, PieChart, LayoutDashboard } from "lucide-react"
 import { useNotifications } from "@/contexts/notification-context"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +50,7 @@ export default function DashboardLayout({
 }) {
   const { notifications, markAsRead, markAllAsRead } = useNotifications()
   const router = useRouter()
+  const pathname = usePathname()
 
   const hasUnreadNotifications = notifications.length > 0
 
@@ -64,13 +65,45 @@ export default function DashboardLayout({
       <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="font-semibold">
+            <Link 
+              href="/"
+              className="font-semibold hover:text-foreground/80 transition-colors"
+            >
               TenderWatch
             </Link>
           </div>
 
           {/* Right side controls */}
           <div className="flex items-center gap-4">
+
+            {/* Statistics Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "relative",
+                pathname === "/dashboard/statistics" && "bg-accent"
+              )}
+              onClick={() => router.push('/dashboard/statistics')}
+            >
+              <PieChart className="h-5 w-5" />
+              <span className="sr-only">Statistics View</span>
+            </Button>
+            
+            {/* Dashboard View Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "relative",
+                pathname === "/dashboard" && "bg-accent"
+              )}
+              onClick={() => router.push('/dashboard')}
+            >
+              <LayoutDashboard className="h-5 w-5" />
+              <span className="sr-only">Dashboard View</span>
+            </Button>
+
             {/* Notification Bell */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
