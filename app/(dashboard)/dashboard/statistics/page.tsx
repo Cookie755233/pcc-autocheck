@@ -1,7 +1,7 @@
 "use client"
 
+import React, { useState, useMemo, useEffect, useRef } from "react"
 import { useSearchParams } from "next/navigation"
-import { useState, useMemo, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { TenderGroup } from "@/types/tender"
@@ -36,6 +36,8 @@ const TYPE_COLORS = {
   "公開招標公告": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
   "公開招標更正公告": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
   
+  
+  "經公開評選或公開徵求之限制性招標公告":"bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
   "經公開評選或公開徵求之限制性招標更正公告": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
   "限制性招標(經公開評選或公開徵求)公告": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
   "限制性招標(經公開評選或公開徵求)更正公告": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
@@ -77,8 +79,8 @@ function getTenderDates(version: any) {
   }
   if (type.includes('出租')) {
     return {
-      startDate: '114/01/01',
-      endDate: '114/5/31'
+      startDate: version.date || detail['標案內容:截標時間'],
+      endDate: detail['標案內容:截標時間']
     };
   }
 
@@ -97,9 +99,12 @@ export default function StatisticsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedTender, setSelectedTender] = useState<TenderGroup | null>(null)
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [viewMode, setViewMode] = useState<'months' | 'years'>('months');
   
   // Add refs for the intersections
   const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const monthHeadersRef = useRef<HTMLDivElement>(null);
+  const timelineContentRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Helper function to safely parse dates
@@ -107,25 +112,48 @@ export default function StatisticsPage() {
     if (!dateStr) return new Date();
     
     try {
-      // Handle ROC date format (e.g., "113/10/24")
-      if (typeof dateStr === 'string' && dateStr.includes('/')) {
-        const [year, month, day] = dateStr.split('/').map(Number);
-        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-          const date = new Date(year + 1911, month - 1, day);
+      //! Debug log for date parsing
+      console.log("Parsing date:", dateStr);
+      
+      // Handle ROC date format (e.g., "113/10/24" or "113/1/1 17:00")
+      if (typeof dateStr === 'string') {
+        // Check for ROC date format with optional time
+        const rocDateTimeRegex = /^(\d{1,3})\/(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?$/;
+        const match = dateStr.match(rocDateTimeRegex);
+        
+        if (match) {
+          const [_, yearStr, monthStr, dayStr, hourStr, minuteStr] = match;
+          const year = parseInt(yearStr) + 1911; // Convert ROC year to Gregorian
+          const month = parseInt(monthStr) - 1; // JS months are 0-indexed
+          const day = parseInt(dayStr);
+          
+          // Create date with or without time component
+          if (hourStr && minuteStr) {
+            const hour = parseInt(hourStr);
+            const minute = parseInt(minuteStr);
+            const date = new Date(year, month, day, hour, minute);
+            console.log(`Parsed ROC date with time: ${dateStr} → ${date.toISOString()}`);
+            return isNaN(date.getTime()) ? new Date() : date;
+          } else {
+            const date = new Date(year, month, day);
+            console.log(`Parsed ROC date: ${dateStr} → ${date.toISOString()}`);
+            return isNaN(date.getTime()) ? new Date() : date;
+          }
+        }
+        
+        // Handle YYYYMMDD format
+        if (/^\d{8}$/.test(dateStr)) {
+          const year = parseInt(dateStr.substring(0, 4));
+          const month = parseInt(dateStr.substring(4, 6)) - 1;
+          const day = parseInt(dateStr.substring(6, 8));
+          const date = new Date(year, month, day);
+          console.log(`Parsed YYYYMMDD date: ${dateStr} → ${date.toISOString()}`);
           return isNaN(date.getTime()) ? new Date() : date;
         }
       }
-      
-      // Handle YYYYMMDD format
-      const str = dateStr.toString();
-      if (str.length === 8) {
-        const year = parseInt(str.substring(0, 4));
-        const month = parseInt(str.substring(4, 6)) - 1;
-        const day = parseInt(str.substring(6, 8));
-        const date = new Date(year, month, day);
-        return isNaN(date.getTime()) ? new Date() : date;
-      }
 
+      // Fallback to default date
+      console.log(`Could not parse date: ${dateStr}, using current date`);
       return new Date();
     } catch (error) {
       console.error("Error parsing date:", dateStr, error);
@@ -328,14 +356,28 @@ export default function StatisticsPage() {
     const result = [];
     let current = new Date(timelineRange.start);
     
-    while (current <= timelineRange.end) {
-      result.push(new Date(current));
-      current.setMonth(current.getMonth() + 1);
+    if (viewMode === 'years') {
+      // For year view, create one entry per year
+      const startYear = current.getFullYear();
+      const endYear = timelineRange.end.getFullYear();
+      
+      for (let year = startYear; year <= endYear; year++) {
+        result.push(new Date(year, 0, 1)); // January 1st of each year
+      }
+    } else {
+      // For month view, create one entry per month
+      while (current <= timelineRange.end) {
+        result.push(new Date(current));
+        current.setMonth(current.getMonth() + 1);
+      }
     }
     
-    console.log("Generated months:", result.map(d => format(d, 'MMM yyyy')));
+    console.log(`Generated ${viewMode}:`, result.map(d => 
+      viewMode === 'years' ? format(d, 'yyyy') : format(d, 'MMM yyyy')
+    ));
+    
     return result;
-  }, [timelineRange]);
+  }, [timelineRange, viewMode]);
 
   // Update row height and set up sticky effects
   useEffect(() => {
@@ -350,6 +392,98 @@ export default function StatisticsPage() {
     
   }, [zoomLevel, timelineRange]);
 
+  // Synchronize horizontal scrolling between headers and content
+  useEffect(() => {
+    const monthHeadersEl = monthHeadersRef.current;
+    const timelineContentEl = timelineContentRef.current;
+    
+    if (!monthHeadersEl || !timelineContentEl) return;
+    
+    let isScrolling = false;
+    
+    //@ Sync scroll between month headers and timeline content
+    const syncScroll = (e: Event) => {
+      if (isScrolling) return; // Prevent infinite scroll loop
+      
+      isScrolling = true;
+      
+      try {
+        const target = e.target as HTMLElement;
+        
+        if (target === monthHeadersEl) {
+          // When month headers are scrolled, update timeline content
+          timelineContentEl.scrollLeft = monthHeadersEl.scrollLeft;
+          console.log("Syncing from headers to content:", monthHeadersEl.scrollLeft);
+        } else if (target === timelineContentEl) {
+          // When timeline content is scrolled, update month headers
+          monthHeadersEl.scrollLeft = timelineContentEl.scrollLeft;
+          console.log("Syncing from content to headers:", timelineContentEl.scrollLeft);
+        }
+      } catch (error) {
+        console.error("Error syncing scroll:", error);
+      }
+      
+      // Reset the flag after a short delay to allow the scroll to complete
+      setTimeout(() => {
+        isScrolling = false;
+      }, 10);
+    };
+    
+    // Use passive: true for better performance
+    monthHeadersEl.addEventListener('scroll', syncScroll, { passive: true });
+    timelineContentEl.addEventListener('scroll', syncScroll, { passive: true });
+    
+    // Initial sync
+    const initialSync = () => {
+      try {
+        // Force both elements to have the same scroll position
+        const initialPosition = 0;
+        monthHeadersEl.scrollLeft = initialPosition;
+        timelineContentEl.scrollLeft = initialPosition;
+        console.log("Initial scroll sync complete");
+      } catch (error) {
+        console.error("Error in initial sync:", error);
+      }
+    };
+    
+    // Run initial sync after a short delay to ensure elements are properly rendered
+    const timeoutId = setTimeout(initialSync, 100);
+    
+    // Add visual grid lines to help with alignment
+    const addGridLines = () => {
+      try {
+        const container = timelineContainerRef.current;
+        if (!container) return;
+        
+        // Clear existing grid lines
+        const existingLines = container.querySelectorAll('.month-grid-line');
+        existingLines.forEach(line => line.remove());
+        
+        // Add new grid lines at month boundaries
+        const monthWidth = 100 * zoomLevel;
+        months.forEach((_, i) => {
+          const line = document.createElement('div');
+          line.className = 'month-grid-line absolute top-0 bottom-0 pointer-events-none';
+          line.style.left = `${i * monthWidth}px`;
+          line.style.height = '100%';
+          line.style.zIndex = '1';
+          container.appendChild(line);
+        });
+      } catch (error) {
+        console.error("Error adding grid lines:", error);
+      }
+    };
+    
+    // Add grid lines after a short delay
+    const gridLinesTimeoutId = setTimeout(addGridLines, 200);
+    
+    return () => {
+      monthHeadersEl.removeEventListener('scroll', syncScroll);
+      timelineContentEl.removeEventListener('scroll', syncScroll);
+      clearTimeout(timeoutId);
+      clearTimeout(gridLinesTimeoutId);
+    };
+  }, [months, zoomLevel]);
 
   if (isLoading) {
     return (
@@ -371,6 +505,28 @@ export default function StatisticsPage() {
           <div className="text-sm text-muted-foreground">
             {format(timelineRange.start, 'MMM yyyy')} - {format(timelineRange.end, 'MMM yyyy')}
           </div>
+          
+          {/* View mode toggle */}
+          <div className="flex items-center border rounded-lg overflow-hidden">
+            <Button 
+              variant={viewMode === 'months' ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none h-8"
+              onClick={() => setViewMode('months')}
+            >
+              Months
+            </Button>
+            <div className="w-[1px] h-4 bg-border" />
+            <Button 
+              variant={viewMode === 'years' ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none h-8"
+              onClick={() => setViewMode('years')}
+            >
+              Years
+            </Button>
+          </div>
+          
           <div className="flex items-center gap-1 border rounded-lg p-1 bg-white/50">
             <Button 
               variant="ghost" 
@@ -402,178 +558,310 @@ export default function StatisticsPage() {
       </div>
 
       <div className="border rounded-2xl overflow-hidden mt-10">
-        {/* Month headers - Sticky with proper spacing */}
-        <div className="sticky z-40 bg-background border-b">
-          <div className="flex">
-            <div className="w-[200px] shrink-0 font-medium sticky left-0 z-10 border-r bg-background">
-              <div className="flex items-center justify-center h-[60px]">
-                Keywords
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-x-auto">
-              <div 
-                className="flex"
-                style={{ 
-                  width: `${Math.max(1200, months.length * 100) * zoomLevel}px`,
-                  transition: 'width 0.5s ease'
-                }}
-              >
-                {months.map((date, i) => (
-                  <div 
-                    key={i} 
-                    className="flex-1 font-medium p-4"
-                    style={{ 
-                      minWidth: `${100 * zoomLevel}px`,
-                    }}
-                  >
-                    {zoomLevel < 0.75 ? (
-                      <div className="text-center">
-                        <div className="text-sm">{format(date, 'MMM')}</div>
-                        {i === 0 || date.getMonth() === 0 ? (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {format(date, 'yyyy')}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="text-sm">
-                        {format(date, 'MMM yyyy')}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Timeline content with dividers */}
-        <div 
-          ref={timelineContainerRef}
-          className="relative max-h-[calc(100vh-250px)] overflow-y-auto backdrop-blur-xl backdrop-opacity-50 bg-white/50"
-        >
-          {Object.entries(timelineData).map(([keyword, data], index) => (
-            <div 
-              key={keyword}
-              className={cn(
-                "flex relative",
-                index !== 0 && "border-t border-border/50"
-              )}
-              ref={el => sectionRefs.current[keyword] = el}
-            >
-              {/* Sticky keyword column - FIXED with proper sticky behavior */}
-              <div className="w-[200px] shrink-0 sticky left-0 backdrop-blur-xl backdrop-opacity-50 bg-white/50 border-r">
-                <div className="p-4 sticky top-0 transition-all">
-                  <div className="font-medium text-end pr-4">{keyword}</div>
-                  <div className="text-sm text-muted-foreground text-end pr-4">
-                    {data.tenders.length} tenders
-                  </div>
+        {/* Main timeline container with horizontal scrolling */}
+        <div className="flex flex-col">
+          {/* Month headers - Sticky at top */}
+          <div className="sticky z-40 bg-background border-b">
+            <div className="flex">
+              {/* Fixed keyword column header */}
+              <div className="w-[200px] shrink-0 font-medium sticky left-0 z-50 border-r bg-background">
+                <div className="flex items-center justify-center h-[60px]">
+                  Keywords
                 </div>
               </div>
-
-              {/* Timeline bars */}
-              <div className="flex-1 backdrop-blur-xl backdrop-opacity-50 bg-white/50">
-                {/* Add padding wrapper */}
-                <div className="py-4">
-                  {data.rows.map((row, rowIndex) => (
+              
+              {/* Scrollable month headers */}
+              <div 
+                ref={monthHeadersRef}
+                className="overflow-x-auto scrollbar-hide"
+                style={{ 
+                  maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
+                  scrollbarWidth: "none" // Firefox
+                }}
+              >
+                <div 
+                  className="flex"
+                  style={{ 
+                    width: `${Math.max(1200, months.length * (viewMode === 'years' ? 200 : 100)) * zoomLevel}px`,
+                    minWidth: "100%",
+                    transition: 'width 0.5s ease'
+                  }}
+                >
+                  {months.map((date, i) => (
                     <div 
-                      key={rowIndex}
-                      className="relative h-10 last:border-b-0 hover:bg-accent/5"
+                      key={i} 
+                      className="font-medium p-4"
+                      style={{ 
+                        width: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
+                        minWidth: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
+                      }}
                     >
-                      {/* Center content vertically */}
-                      <div className="absolute inset-x-0 h-full flex items-center">
-                        <div className="w-full px-4">
-                          {/* Tender bars container */}
-                          <div className="relative h-full flex items-center">
-                            {row.tenders.map(group => {
-                              const startDate = parseTenderDate(group.tender.startDate) || new Date();
-                              const endDate = parseTenderDate(group.tender.endDate) || new Date(startDate.getTime() + (30 * 24 * 60 * 60 * 1000));
-
-                              const timelineStart = timelineRange.start.getTime();
-                              const timelineEnd = timelineRange.end.getTime();
-                              const totalDuration = timelineEnd - timelineStart;
-                              
-                              const left = ((startDate.getTime() - timelineStart) / totalDuration) * 100;
-                              const width = ((endDate.getTime() - startDate.getTime()) / totalDuration) * 100;
-
-                              return (
-                                <HoverCard key={group.tender.id} openDelay={0.1} closeDelay={0.1}>
-                                  <HoverCardTrigger asChild>
-                                    <button
-                                      onClick={() => setSelectedTender(group)}
-                                      className={cn(
-                                        "absolute rounded-full transition-all group",
-                                        "flex items-center justify-center text-sm",
-                                        TYPE_COLORS[group.tender.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default,
-                                        group.tender.isHighlighted && "shadow-[0px_0px_5px_3px_rgba(250,204,21,0.5)] border-yellow-400 ring-1 ring-yellow-400"
-                                      )}
-                                      style={{
-                                        left: `${Math.max(0, Math.min(left, 100))}%`,
-                                        width: `${Math.max(8, Math.min(width, 100 - left))}%`,
-                                        height: '26px',
-                                        fontSize: `${Math.min(16, Math.max(8, 12 / zoomLevel)) * zoomLevel}px`,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        transition: 'all 0.2s ease-in-out'
-                                      }}
-                                    >
-                                      <span className="truncate text-center p-1">
-                                        {group.tender.title}
-                                      </span>
-                                    </button>
-                                  </HoverCardTrigger>
-                                  <HoverCardContent 
-                                    className={cn(
-                                      "w-auto max-w-[400px] p-3",
-                                      "bg-white/95 backdrop-blur-sm",
-                                      "border border-border/50 shadow-lg",
-                                      "rounded-lg",
-                                      "animate-in fade-in-0 zoom-in-95",
-                                      "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
-                                    )}
-                                    side="top" 
-                                    align="center"
-                                    sideOffset={5}
-                                    avoidCollisions={true}
-                                  >
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center gap-2">
-                                        <Badge 
-                                          variant="secondary"
-                                          className={cn(
-                                            "h-6 px-2 text-xs font-normal",
-                                            TYPE_COLORS[group.tender.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default
-                                          )}
-                                        >
-                                          {group.tender.type}
-                                        </Badge>
-                                        <span className="text-xs text-muted-foreground">
-                                          {format(parseTenderDate(group.tender.startDate), 'PPP')}
-                                        </span>
-                                      </div>
-                                      <p className="text-sm font-medium leading-snug">
-                                        {group.tender.title}
-                                      </p>
-                                      {group.tender.brief?.['預算金額'] && (
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                          Budget: {group.tender.brief['預算金額']}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </HoverCardContent>
-                                </HoverCard>
-                              );
-                            })}
-                          </div>
+                      {viewMode === 'years' ? (
+                        // Year view
+                        <div className="text-center text-base font-semibold">
+                          {format(date, 'yyyy')}
                         </div>
-                      </div>
+                      ) : zoomLevel < 0.75 ? (
+                        // Compact month view
+                        <div className="text-center">
+                          <div className="text-sm">{format(date, 'MMM')}</div>
+                          {i === 0 || date.getMonth() === 0 ? (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {format(date, 'yyyy')}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        // Regular month view
+                        <div className="text-sm">
+                          {format(date, 'MMM yyyy')}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-          ))}
+          </div>
+
+          {/* Timeline content - Scrolls with headers */}
+          <div 
+            className="relative max-h-[calc(100vh-250px)] overflow-y-auto bg-background"
+            onScroll={(e) => {
+              // When vertical scrolling happens, we need to keep the horizontal scroll position in sync
+              if (monthHeadersRef.current && timelineContentRef.current) {
+                monthHeadersRef.current.scrollLeft = timelineContentRef.current.scrollLeft;
+              }
+            }}
+          >
+            <div className="flex">
+              {/* Fixed keyword column */}
+              <div className="w-[200px] shrink-0 sticky left-0 z-40 bg-background/80 backdrop-blur-sm border-r">
+                {Object.entries(timelineData).map(([keyword, data], index) => {
+                  // Calculate the total height based on the number of rows
+                  const rowCount = Math.max(1, data.rows.length);
+                  
+                  return (
+                    <div 
+                      key={keyword}
+                      className="border-b border-border/50"
+                      ref={(el) => { sectionRefs.current[keyword] = el; }}
+                    >
+                      {data.rows.length === 0 ? (
+                        // Empty row to match the timeline row
+                        <div className="h-[60px] flex items-center px-4 group">
+                          <div className="w-full space-y-1">
+                            <div className="font-medium text-end relative group">
+                              <span className="inline-block max-w-[180px] truncate">{keyword}</span>
+                              {keyword.length > 18 && (
+                                <div className="absolute right-0 top-[-5px] scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right">
+                                  {keyword}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground text-end">
+                              {data.tenders.length} tenders
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        // Create matching rows for each timeline row
+                        data.rows.map((_, rowIndex) => (
+                          <div key={`${keyword}-row-${rowIndex}`} className="h-[60px] flex items-center px-4 group">
+                            {rowIndex === 0 && (
+                              <div className="w-full space-y-1">
+                                <div className="font-medium text-end relative group">
+                                  <span className="inline-block max-w-[180px] truncate">{keyword}</span>
+                                  {keyword.length > 18 && (
+                                    <div className="absolute right-0 top-[-5px] scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right">
+                                      {keyword}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground text-end">
+                                  {data.tenders.length} tenders
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Scrollable timeline content */}
+              <div 
+                ref={timelineContentRef}
+                className="overflow-x-auto scrollbar-hide"
+                style={{ 
+                  maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
+                  scrollbarWidth: "none" // Firefox
+                }}
+              >
+                <div 
+                  ref={timelineContainerRef}
+                  style={{ 
+                    width: `${Math.max(1200, months.length * (viewMode === 'years' ? 200 : 100)) * zoomLevel}px`,
+                    minWidth: "100%",
+                    transition: 'width 0.5s ease'
+                  }}
+                >
+                  {/* Timeline rows */}
+                  {Object.entries(timelineData).map(([keyword, data], keywordIndex) => (
+                    <div 
+                      key={keyword}
+                      className="border-b border-border/50"
+                    >
+                      {data.rows.length === 0 ? (
+                        // Empty placeholder row to maintain alignment
+                        <div className="h-[60px]"></div>
+                      ) : (
+                        // Render rows for this keyword
+                        data.rows.map((row, rowIndex) => (
+                          <div 
+                            key={`${keyword}-row-${rowIndex}`}
+                            className="relative h-[60px] flex items-center hover:bg-accent/10 transition-colors"
+                          >
+                            {/* Tender bars container */}
+                            <div className="relative w-full h-10">
+                              {row.tenders.map(group => (
+                                <React.Fragment key={group.tender.id}>
+                                  {group.versions.map((version, versionIndex) => {
+                                    const dates = getTenderDates(version);
+                                    const startDate = parseTenderDate(dates.startDate);
+                                    const endDate = dates.endDate ? parseTenderDate(dates.endDate) : new Date(startDate.getTime() + (30 * 24 * 60 * 60 * 1000));
+                                    
+                                    // Calculate position based on months
+                                    const timelineStartTime = timelineRange.start.getTime();
+                                    const timelineEndTime = timelineRange.end.getTime();
+                                    const totalTimelineMs = timelineEndTime - timelineStartTime;
+                                    
+                                    // Calculate position in pixels
+                                    const startTimeOffset = startDate.getTime() - timelineStartTime;
+                                    const endTimeOffset = endDate.getTime() - timelineStartTime;
+                                    
+                                    // Calculate total width based on view mode
+                                    const unitWidthPx = (viewMode === 'years' ? 200 : 100) * zoomLevel;
+                                    const totalWidthPx = months.length * unitWidthPx;
+                                    
+                                    // Calculate position as percentage of total timeline width
+                                    const startPct = startTimeOffset / totalTimelineMs;
+                                    const endPct = endTimeOffset / totalTimelineMs;
+                                    
+                                    // Convert percentage to pixels
+                                    const startPx = startPct * totalWidthPx;
+                                    const endPx = endPct * totalWidthPx;
+                                    const widthPx = Math.max(30, endPx - startPx); // Ensure minimum width
+                                    
+                                    // Calculate opacity based on version index
+                                    const opacity = 1 - (versionIndex * 0.15);
+                                    
+                                    // Log position calculations for debugging
+                                    if (group.tender.title === "102年推動建築物設置太陽光電設施計畫委託技術服務案") {
+                                      console.log(`Target tender position: start: ${startPx.toFixed(2)}px, width: ${widthPx.toFixed(2)}px, startPct: ${(startPct * 100).toFixed(2)}%, endPct: ${(endPct * 100).toFixed(2)}%`);
+                                    }
+
+                                    // Check if this tender is highlighted
+                                    const isHighlighted = group.tender.isHighlighted;
+                                    
+                                    // Determine if we should show the title based on width
+                                    // Only show title if bar is wide enough (at least 120px)
+                                    const showTitle = widthPx >= 120;
+
+                                    return (
+                                      <HoverCard key={`${group.tender.id}-${version.date}`} openDelay={0.1} closeDelay={0.1}>
+                                        <HoverCardTrigger asChild>
+                                          <button
+                                            onClick={() => setSelectedTender(group)}
+                                            className={cn(
+                                              "absolute rounded-full transition-all group border-2",
+                                              isHighlighted 
+                                                ? "border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]" // Highlight the tender bar
+                                                : "border-white",
+                                              "flex items-center justify-center text-sm",
+                                              TYPE_COLORS[version.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default
+                                            )}
+                                            style={{
+                                              left: `${Math.max(0, startPx)}px`,
+                                              width: `${widthPx}px`,
+                                              height: '24px',
+                                              fontSize: `${Math.min(16, Math.max(8, 12 / zoomLevel)) * zoomLevel}px`,
+                                              top: '50%',
+                                              transform: 'translateY(-50%)',
+                                              transition: 'all 0.2s ease-in-out',
+                                              opacity: isHighlighted ? 1 : opacity, // Full opacity for highlighted tenders
+                                              zIndex: isHighlighted ? 50 : (10 + (group.versions.length - versionIndex)) // Higher z-index for highlighted tenders
+                                            }}
+                                          >
+                                            {/* Only show text if bar is wide enough */}
+                                            {showTitle && (
+                                              <span className="truncate text-center p-1">
+                                                {group.tender.title}
+                                              </span>
+                                            )}
+                                          </button>
+                                        </HoverCardTrigger>
+                                        <HoverCardContent 
+                                          className={cn(
+                                            "w-auto max-w-[400px] p-3",
+                                            "bg-white/95 backdrop-blur-sm",
+                                            "border border-border/50 shadow-lg",
+                                            "rounded-lg",
+                                            "animate-in fade-in-0 zoom-in-95",
+                                            "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+                                          )}
+                                          style={{ zIndex: 100 }}
+                                          side="bottom" 
+                                          align="center"
+                                          sideOffset={5}
+                                          avoidCollisions={true}
+                                        >
+                                          <div className="flex flex-col gap-2">
+                                            <div className="flex items-center justify-between">
+                                              <Badge 
+                                                className={cn(
+                                                  TYPE_COLORS[version.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default,
+                                                  "border-none hover:bg-transparent"
+                                                )}
+                                              >
+                                                {version.type}
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground">
+                                                {format(parseTenderDate(dates.startDate), 'PPP')}
+                                              </span>
+                                            </div>
+                                            <p className="text-sm font-medium leading-snug">
+                                              {group.tender.title}
+                                            </p>
+                                            {version.data?.detail?.['預算金額'] && (
+                                              <p className="text-xs text-muted-foreground">
+                                                Budget: {version.data.detail['預算金額']}
+                                              </p>
+                                            )}
+                                            {version.data?.detail?.['招標資料:招標狀態'] && (
+                                              <p className="text-xs text-muted-foreground">
+                                                Status: {version.data.detail['招標資料:招標狀態']}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </HoverCardContent>
+                                      </HoverCard>
+                                    );
+                                  })}
+                                </React.Fragment>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -603,7 +891,7 @@ export default function StatisticsPage() {
         >
           {selectedTender && (
             <div className="h-full flex flex-col rounded-lg overflow-hidden">
-              <SheetHeader className="px-6 py-4 border-b shrink-0">
+              <SheetHeader className="px-6 py-4 shrink-0 max-w-[460px]">
                 <SheetTitle className="text-xl font-semibold">
                   {selectedTender.tender.title}
                 </SheetTitle>
@@ -621,7 +909,7 @@ export default function StatisticsPage() {
               </SheetHeader>
 
               <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0">
-                <TabsList className="px-6 border-b shrink-0">
+                <TabsList className="px-6 shrink-0 ">
                   <div className="w-full grid grid-cols-3">
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="details">Details</TabsTrigger>
@@ -637,7 +925,7 @@ export default function StatisticsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Status</CardTitle>
+                          <CardTitle className="text-base font-medium">Status</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="flex items-center">
@@ -649,27 +937,31 @@ export default function StatisticsPage() {
                       
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Type</CardTitle>
+                          <CardTitle className="text-base font-medium">Type</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <Badge>{selectedTender.tender.type}</Badge>
+                          <span>{selectedTender.tender.type}</span>
                         </CardContent>
                       </Card>
 
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Budget</CardTitle>
+                          <CardTitle className="text-base font-medium">Budget</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <span className="text-lg font-semibold">
-                            {selectedTender.tender.brief['預算金額'] || 'N/A'}
+                          <span>
+                            {
+                              selectedTender.tender['採購資料:預算金額'] || 
+                              selectedTender.tender['已公告資料:預算金額'] || 
+                              'N/A'
+                            }
                           </span>
                         </CardContent>
                       </Card>
 
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Duration</CardTitle>
+                          <CardTitle className="text-base font-medium">Duration</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <span>{selectedTender.tender.brief['其他:履約期限'] || 'N/A'}</span>
@@ -679,7 +971,7 @@ export default function StatisticsPage() {
 
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Description</CardTitle>
+                        <CardTitle className="text-base font-medium">Description</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground">
@@ -689,80 +981,87 @@ export default function StatisticsPage() {
                     </Card>
                   </TabsContent>
                   
-                  {/* TODO */}
                   <TabsContent 
                     value="details" 
-                    className="p-6 space-y-4 mt-0"
+                    className="p-6 mt-0"
                   >
                     {selectedTender.tender.brief && (
-                      <div className="space-y-6">
-                        {/* Basic Information */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg">Basic Information</CardTitle>
-                          </CardHeader>
-                          <CardContent className="grid gap-4">
-                            {[
-                              ['採購資料:標案名稱', 'Project Name'],
-                              ['採購資料:標的分類', 'Category'],
-                              ['採購資料:招標方式', 'Method'],
-                              ['採購資料:預算金額', 'Budget'],
-                              ['採購資料:標案案號', 'Project Number']
-                            ].map(([key, label]) => (
-                              <div key={key} className="grid grid-cols-4 gap-4">
-                                <span className="text-sm font-medium text-right">{label}</span>
-                                <span className="col-span-3 text-sm">
-                                  {selectedTender.tender.brief[key] || 'N/A'}
-                                </span>
-                              </div>
-                            ))}
-                          </CardContent>
-                        </Card>
-
-                        {/* Timeline Information */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg">Timeline</CardTitle>
-                          </CardHeader>
-                          <CardContent className="grid gap-4">
-                            {[
-                              ['招標資料:公告日', 'Announcement Date'],
-                              ['領投開標:截止投標', 'Submission Deadline'],
-                              ['領投開標:開標時間', 'Opening Date'],
-                              ['其他:履約期限', 'Contract Duration']
-                            ].map(([key, label]) => (
-                              <div key={key} className="grid grid-cols-4 gap-4">
-                                <span className="text-sm font-medium text-right">{label}</span>
-                                <span className="col-span-3 text-sm">
-                                  {selectedTender.tender.brief[key] || 'N/A'}
-                                </span>
-                              </div>
-                            ))}
-                          </CardContent>
-                        </Card>
-
-                        {/* Additional Details */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg">Additional Details</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="grid gap-4">
-                              {Object.entries(selectedTender.tender.brief)
-                                .filter(([key]) => !key.includes('機關資料:') && 
-                                                 !key.includes('招標資料:') && 
-                                                 !key.includes('領投開標:') &&
-                                                 !key.includes('其他:'))
-                                .map(([key, value]) => (
-                                  <div key={key} className="grid grid-cols-4 gap-4">
-                                    <span className="text-sm font-medium text-right">{key}</span>
-                                    <span className="col-span-3 text-sm">{value || 'N/A'}</span>
+                      <ScrollArea className="h-[calc(100vh-250px)]">
+                        <div className="max-w-[460px] space-y-6 pr-6">
+                          {/* Basic Information */}
+                          <Card>
+                            <CardHeader className="pb-4">
+                              <CardTitle className="text-base font-medium">Basic Information</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                {[
+                                  ['採購資料:標案名稱', 'Project Name'],
+                                  ['採購資料:標的分類', 'Category'],
+                                  ['採購資料:招標方式', 'Method'],
+                                  ['採購資料:預算金額', 'Budget'],
+                                  ['採購資料:標案案號', 'Project Number']
+                                ].map(([key, label]) => (
+                                  <div key={key} className="space-y-1.5">
+                                    <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+                                    <dd className="text-sm break-words">
+                                      {selectedTender.tender.brief[key] || 'N/A'}
+                                    </dd>
                                   </div>
                                 ))}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Timeline Information */}
+                          <Card>
+                            <CardHeader className="pb-4">
+                              <CardTitle className="text-base font-medium">Timeline</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                {[
+                                  ['招標資料:公告日', 'Announcement Date'],
+                                  ['領投開標:截止投標', 'Submission Deadline'],
+                                  ['領投開標:開標時間', 'Opening Date'],
+                                  ['其他:履約期限', 'Contract Duration']
+                                ].map(([key, label]) => (
+                                  <div key={key} className="space-y-1.5">
+                                    <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+                                    <dd className="text-sm break-words">
+                                      {selectedTender.tender.brief[key] || 'N/A'}
+                                    </dd>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Additional Details */}
+                          <Card>
+                            <CardHeader className="pb-4">
+                              <CardTitle className="text-base font-medium">Additional Details</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                {Object.entries(selectedTender.tender.brief)
+                                  .filter(([key]) => !key.includes('機關資料:') && 
+                                                   !key.includes('招標資料:') && 
+                                                   !key.includes('領投開標:') &&
+                                                   !key.includes('其他:'))
+                                  .map(([key, value]) => (
+                                    <div key={key} className="space-y-1.5">
+                                      <dt className="text-sm font-medium text-muted-foreground">{key}</dt>
+                                      <dd className="text-sm break-words whitespace-pre-wrap">
+                                        {value || 'N/A'}
+                                      </dd>
+                                    </div>
+                                  ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </ScrollArea>
                     )}
                   </TabsContent>
                   
@@ -770,14 +1069,14 @@ export default function StatisticsPage() {
                     value="versions" 
                     className="p-6 space-y-4 mt-0"
                   >
-                    {selectedTender.tender.versions.map((version, index) => (
+                    {selectedTender.versions?.map((version, index) => (
                       <Card key={index}>
                         <CardHeader className="pb-2">
                           <div className="flex items-center justify-between">
                             <Badge 
                               className={cn(
                                 TYPE_COLORS[version.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default,
-                                "border-none"
+                                "border-none hover:bg-transparent"
                               )}
                             >
                               {version.type}
