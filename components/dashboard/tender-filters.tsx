@@ -72,7 +72,12 @@ const FilterSection = ({
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-8 w-32 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="
+                h-8 w-32 rounded-md border border-input bg-background dark:border-gray-500
+                px-3 py-1 text-sm shadow-sm transition-colors
+                placeholder:text-muted-foreground focus-visible:outline-none 
+                focus-visible:ring-1 focus-visible:ring-ring
+                "
             />
             {searchTerm && (
               <button 
@@ -114,7 +119,7 @@ const FilterSection = ({
             <Badge
               key={item}
               variant={selectedItems.includes(item) ? "default" : "outline"}
-              className="cursor-pointer"
+              className="cursor-pointer dark:border-gray-500"
               onClick={() => onItemClick(item)}
             >
               {item}

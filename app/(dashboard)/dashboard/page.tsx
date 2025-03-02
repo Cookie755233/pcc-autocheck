@@ -15,7 +15,7 @@ export default function DashboardPage() {
     <div className="flex-1 bg-transparent">
       <div className={`
         grid grid-cols-1 md:grid-cols-4 gap-6 
-        bg-white/30 backdrop-blur-xl backdrop-opacity-50
+        bg-background/30 backdrop-blur-xl
         `}
       >
         <div className="md:col-span-1">

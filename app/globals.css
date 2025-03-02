@@ -5,32 +5,32 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 222.2 84% 4.9%;
  
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
+    --popover-foreground: 222.2 84% 4.9%;
  
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
  
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
  
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
  
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
  
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
  
     --radius: 0.5rem;
  
@@ -46,33 +46,33 @@
   }
  
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
  
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
  
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
  
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
  
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
  
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
  
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
  
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
  
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -87,6 +87,7 @@
   }
   body {
     @apply bg-background text-foreground min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-800;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
  
@@ -308,4 +309,231 @@ section {
 
 .dialog-content[data-state="closed"] {
   animation: slide-out-to-right 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Custom scrollbar styling */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@layer utilities {
+  .timeline-border {
+    @apply border-border dark:border-gray-800;
+  }
+}
+
+/* Custom dark mode helper classes */
+.dark .tender-card-bg {
+  background: hsl(var(--card));
+  border-color: hsl(215 27.9% 16.9% / 0.8);
+}
+
+.dark .hover-highlight:hover {
+  background-color: hsl(var(--accent) / 0.15);
+}
+
+.month-grid-line {
+  width: 1px;
+  background-color: hsl(var(--border));
+}
+
+.dark .month-grid-line {
+  background-color: hsl(var(--border) / 0.5);
+}
+
+/* Theme transition animations */
+@keyframes flash-to-light {
+  0% {
+    opacity: 0;
+    background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 60%);
+    transform: scale(0);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%);
+    transform: scale(2);
+  }
+}
+
+@keyframes flash-to-dark {
+  0% {
+    opacity: 0;
+    background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0) 60%);
+    transform: scale(0);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0) 100%);
+    transform: scale(2);
+  }
+}
+
+.animate-flash-to-light {
+  animation: flash-to-light 0.7s ease-out forwards;
+}
+
+.animate-flash-to-dark {
+  animation: flash-to-dark 0.7s ease-out forwards;
+}
+
+/* Add celestial theme toggle animations */
+@keyframes darken {
+  0% { opacity: 0; }
+  30% { opacity: 0.4; }
+  60% { opacity: 0.7; }
+  100% { opacity: 0.85; }
+}
+
+@keyframes lighten {
+  0% { opacity: 0.85; }
+  40% { opacity: 0.5; }
+  70% { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+
+@keyframes sun-to-moon {
+  0% {
+    transform: translate(-50vw, 50vh) scale(0.3);
+    filter: brightness(1.2) drop-shadow(0 0 20px rgba(255, 200, 0, 0.7));
+  }
+  40% {
+    transform: translate(-20vw, 10vh) scale(0.6) rotate(120deg);
+    filter: brightness(1) drop-shadow(0 0 10px rgba(255, 200, 0, 0.5));
+  }
+  70% {
+    transform: translate(0, 0) scale(0.9) rotate(240deg);
+    filter: brightness(0.8) drop-shadow(0 0 5px rgba(200, 220, 255, 0.2));
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(360deg);
+    filter: brightness(0.7) drop-shadow(0 0 15px rgba(200, 220, 255, 0.3));
+  }
+}
+
+@keyframes moon-to-sun {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    filter: brightness(0.7) drop-shadow(0 0 15px rgba(200, 220, 255, 0.3));
+  }
+  40% {
+    transform: translate(-20vw, 10vh) scale(0.8) rotate(120deg);
+    filter: brightness(0.9) drop-shadow(0 0 5px rgba(255, 200, 0, 0.2));
+  }
+  70% {
+    transform: translate(-35vw, 30vh) scale(0.6) rotate(240deg);
+    filter: brightness(1) drop-shadow(0 0 10px rgba(255, 200, 0, 0.5));
+  }
+  100% {
+    transform: translate(-50vw, 50vh) scale(0.3) rotate(360deg);
+    filter: brightness(1.2) drop-shadow(0 0 20px rgba(255, 200, 0, 0.7));
+  }
+}
+
+@keyframes sun-rays-fade {
+  0% { opacity: 1; transform: scale(1) rotate(0deg); }
+  50% { opacity: 0.5; transform: scale(0.8) rotate(180deg); }
+  100% { opacity: 0; transform: scale(0) rotate(360deg); }
+}
+
+@keyframes sun-rays-appear {
+  0% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 0.5; transform: scale(0.8) rotate(180deg); }
+  100% { opacity: 1; transform: scale(1) rotate(360deg); }
+}
+
+@keyframes moon-appear {
+  0% { opacity: 0; transform: scale(0); }
+  60% { opacity: 0; transform: scale(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes moon-fade {
+  0% { opacity: 1; transform: scale(1); }
+  40% { opacity: 0; transform: scale(0); }
+  100% { opacity: 0; transform: scale(0); }
+}
+
+@keyframes stars-appear {
+  0% { opacity: 0; transform: scale(0.8); }
+  40% { opacity: 0.3; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes stars-disappear {
+  0% { opacity: 1; transform: scale(1); }
+  60% { opacity: 0.3; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(0.8); }
+}
+
+@keyframes twinkle {
+  0% { opacity: 0.1; transform: scale(0.6); }
+  50% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0.1; transform: scale(0.6); }
+}
+
+.animate-darken {
+  animation: darken 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-lighten {
+  animation: lighten 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-sun-to-moon {
+  animation: sun-to-moon 2s ease-in-out forwards;
+}
+
+.animate-moon-to-sun {
+  animation: moon-to-sun 2s ease-in-out forwards;
+}
+
+.animate-sun-rays-fade {
+  animation: sun-rays-fade 1.5s ease-in-out forwards;
+  animation-delay: 0.5s;
+}
+
+.animate-sun-rays-appear {
+  animation: sun-rays-appear 1.5s ease-in-out forwards;
+  animation-delay: 0.5s;
+}
+
+.animate-moon-appear {
+  animation: moon-appear 1s ease-in-out forwards;
+  animation-delay: 1s;
+}
+
+.animate-moon-fade {
+  animation: moon-fade 1s ease-in-out forwards;
+}
+
+.animate-stars-appear {
+  animation: stars-appear 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-stars-disappear {
+  animation: stars-disappear 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-twinkle {
+  animation: twinkle 4s ease-in-out infinite;
+}
+
+/* Custom transition classes for smooth theme switching */
+.theme-transition {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 0.6s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Apply to body when theme changes for smoother global transitions */
+body.theme-changing * {
+  transition-property: background-color, border-color, color, fill, stroke, opacity;
+  transition-duration: 0.6s !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
 }

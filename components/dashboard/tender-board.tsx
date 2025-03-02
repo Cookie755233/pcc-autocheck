@@ -883,18 +883,18 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
         ) : (
           <>
             {/* HEADER - Fixed at the top */}
-            <div className="sticky top-0 left-0 right-0 z-50 bg-white border rounded-lg">
+            <div className="sticky top-0 left-0 right-0 z-50 bg-white border rounded-lg dark:bg-gray-900/50 dark:border-gray-800 dark:shadow-[0_2px_10px_rgba(255,255,255,0.05)]">
               <div className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-4">
                   <Button
                     variant={activeTab === 'inbox' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('inbox')}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
                   >
                     <Inbox className="h-4 w-4" />
                     <span>Inbox</span>
-                    <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs">
+                    <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs dark:bg-primary/30">
                       {visibleInboxCount}/{totalInboxCount}
                     </span>
                   </Button>
@@ -902,11 +902,11 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                     variant={activeTab === 'archived' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('archived')}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 dark:border-gray-700 dark:hover:bg-gray-800"
                   >
                     <Archive className="h-4 w-4" />
                     <span>Archived</span>
-                    <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs">
+                    <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs dark:bg-primary/30">
                       {visibleArchivedCount}/{totalArchivedCount}
                     </span>
                   </Button>
@@ -930,11 +930,11 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                           setTitleSearchFilter(e.target.value.toLowerCase());
                         }
                       }}
-                      className="h-9 w-64 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="h-9 w-64 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:bg-gray-800 dark:border-gray-700"
                     />
                     {searchQuery && (
                       <button 
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground dark:text-gray-400 dark:hover:text-gray-200"
                         onClick={() => {
                           setSearchQuery('');
                           setTitleSearchFilter('');
@@ -950,7 +950,7 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex items-center gap-2 h-9"
+                      className="flex items-center gap-2 h-9 dark:border-gray-700 dark:hover:bg-gray-800"
                       onClick={() => {
                         // Confirm before archiving all
                         if (window.confirm(`Archive all ${filteredTenders.length} visible tenders?`)) {
@@ -964,6 +964,7 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                           toast({
                             title: "Bulk Archive",
                             description: `${filteredTenders.length} tenders have been archived`,
+                            variant: "success",
                           });
                         }
                       }}
@@ -979,12 +980,12 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
               
               <div className="px-4 pb-4">
                 <Collapsible>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-card p-4">
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-card p-4 dark:border-gray-700 dark:bg-gray-800/90">
                     <div className="flex items-center gap-4 min-w-0">
                       <Filter className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium shrink-0">Filters</span>
                       {activeFiltersText && (
-                        <span className="text-sm text-muted-foreground truncate max-w-[700px]">
+                        <span className="text-sm text-muted-foreground truncate max-w-[700px] dark:text-gray-400">
                           {activeFiltersText}
                         </span>
                       )}
@@ -1015,7 +1016,7 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
                       </Button>
                     )}
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="rounded-lg border bg-card mt-2 p-4">
+                  <CollapsibleContent className="rounded-lg border bg-card mt-2 p-4 dark:border-gray-700 dark:bg-gray-800/90">
                     <TenderFilters
                       tags={allTags}
                       types={allTypes}

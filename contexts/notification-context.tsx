@@ -55,6 +55,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     function handleTenderFound(event: CustomEvent) {
       console.log("🔔 NotificationProvider received tender:", event.detail);
       
+      // Only notify for new tenders or tenders with new versions
+      const tender = event.detail;
+      if (!tender.isNew && !tender.hasNewVersions) {
+        console.log("🔕 Skipping notification for existing tender with no changes:", tender.tender.id);
+        return;
+      }
+      
       setNotifications(prev => {
         const newTender = event.detail;
         // Check if notification already exists

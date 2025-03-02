@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
 import { NotificationProvider } from "@/contexts/notification-context"
 import { useEffect, useRef } from "react"
+import { ThemeEffect } from '@/components/ui/theme-effect'
+import { Metadata } from 'next'
 
 const inter = Inter({ subsets: ["latin"] })
 const headingFont = Montserrat({ 
@@ -13,7 +15,7 @@ const headingFont = Montserrat({
   variable: '--font-heading'
 })
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Tender Watch - Government Tender Subscription",
   description: "Subscribe and track government tenders automatically",
 }
@@ -26,6 +28,7 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
+        <head />
         <body className={cn(
           inter.className, 
           headingFont.variable,
@@ -39,12 +42,13 @@ export default function RootLayout({
           
           <ThemeProvider
             attribute="class"
-            defaultTheme="light"
+            defaultTheme="system"
             enableSystem={false}
           >
             <NotificationProvider>
               <Toaster />
               {children}
+              <ThemeEffect />
             </NotificationProvider>
           </ThemeProvider>
         </body>

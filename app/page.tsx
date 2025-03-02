@@ -8,6 +8,7 @@ import { useEffect } from "react"
 import { NavLinks } from "@/components/landing/nav-links"
 import { LearnMoreButton } from "@/components/landing/learn-more-button"
 import { UserButton } from "@clerk/nextjs"
+import { ModeToggle } from "@/components/ui/mode-toggle"
 
 export default async function LandingPage() {
   const { userId } = await auth()
@@ -35,14 +36,18 @@ export default async function LandingPage() {
                 <Button variant="ghost" size="sm" asChild>
                   <Link href="/dashboard">Go to Dashboard</Link>
                 </Button>
+                <ModeToggle />
                 <UserButton afterSignOutUrl="/" />
               </>
             ) : (
-              <SignInButton mode="modal">
-                <Button variant="ghost" size="sm">
-                  Sign in
-                </Button>
-              </SignInButton>
+              <>
+                <ModeToggle />
+                <SignInButton mode="modal">
+                  <Button variant="ghost" size="sm">
+                    Sign in
+                  </Button>
+                </SignInButton>
+              </>
             )}
           </div>
         </div>
@@ -101,10 +106,10 @@ export default async function LandingPage() {
       {/* Features Section */}
       <section 
         id="features" 
-        className={`min-h-screen flex items-center justify-center scroll-mt-14
+        className={`
+          min-h-screen flex items-center justify-center scroll-mt-14
           bg-gradient-to-r from-purple-300/10 via-pink-400/10 to-red-200/10
-          backdrop-blur-sm backdrop-opacity-50 
-          rounded-3xl w-full
+          backdrop-blur-sm backdrop-opacity-50 w-full
         `}
       >
         <div className="container py-8 md:py-12 lg:py-24 space-y-12">

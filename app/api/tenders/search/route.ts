@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Use Web Streams API
+    const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
@@ -66,15 +67,13 @@ export async function POST(req: NextRequest) {
             const keyword = keywords[i];
             
             // Send progress update
-            controller.enqueue(
-              new TextEncoder().encode(
-                `data: ${JSON.stringify({
-                  type: 'progress',
-                  current: i + 1,
-                  total: keywords.length
-                })}\n\n`
-              )
-            );
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              type: 'progress',
+              current: i + 1,
+              total: keywords.length,
+              keyword: keyword,
+              log: `🔍 Searching for keyword: "${keyword}"`
+            })}\n\n`));
             
             console.log(`\n🔍 Processing keyword: "${keyword}"`);
             const tenders = await searchTenders(keyword);
@@ -92,6 +91,12 @@ export async function POST(req: NextRequest) {
                 
                 if (!response.ok) {
                   console.error(`Failed to fetch versions for tender ${tenderId}`)
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                    type: 'progress',
+                    current: i + 1,
+                    total: keywords.length,
+                    log: `⚠️ Error fetching data for keyword "${keyword}": ${response.status} ${response.statusText}`
+                  })}\n\n`));
                   continue
                 }
                 
@@ -177,8 +182,20 @@ export async function POST(req: NextRequest) {
                         }
                       })
                       console.log(`Created version: ${tenderId}, date: ${record.date}, type: ${record.brief?.type || 'unknown'}`)
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                        type: 'progress',
+                        current: i + 1,
+                        total: keywords.length,
+                        log: `✅ New version: ${record.brief?.title?.substring(0, 30) || 'Unnamed'}${record.brief?.title?.length > 30 ? '...' : ''} (${record.date})`
+                      })}\n\n`));
                     } else {
                       console.log(`Version already exists: ${tenderId}, date: ${record.date}, type: ${record.brief?.type || 'unknown'}`)
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                        type: 'progress',
+                        current: i + 1,
+                        total: keywords.length,
+                        log: `📋 Version exists: ${record.brief?.title?.substring(0, 30) || 'Unnamed'}${record.brief?.title?.length > 30 ? '...' : ''} (${record.date})`
+                      })}\n\n`));
                     }
                   } catch (error) {
                     console.error(`Error saving version for ${tenderId}, date ${record.date}:`, error)
@@ -236,35 +253,58 @@ export async function POST(req: NextRequest) {
                       }
                     })),
                     relatedTenders: [],
-                    isNew: !existingTenderIds.includes(tenderId)
+                    isNew: !existingTenderIds.includes(tenderId),
+                    hasNewVersions: savedTender.versions.some(v => 
+                      !existingVersionIds.get(tenderId)?.includes(v.id)
+                    )
                   });
+
+                  // Log the status to client
+                  const isCompletelyNew = !existingTenderIds.includes(tenderId);
+                  const hasNewVersionsOnly = !isCompletelyNew && savedTender.versions.some(v => 
+                    !existingVersionIds.get(tenderId)?.includes(v.id)
+                  );
+                  
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                    type: 'progress',
+                    current: i + 1,
+                    total: keywords.length,
+                    log: isCompletelyNew 
+                      ? `🆕 New tender: ${latestVersion?.data?.brief?.title?.substring(0, 30) || 'Unnamed'}${latestVersion?.data?.brief?.title?.length > 30 ? '...' : ''}`
+                      : hasNewVersionsOnly
+                        ? `📝 Updated tender: ${latestVersion?.data?.brief?.title?.substring(0, 30) || 'Unnamed'}${latestVersion?.data?.brief?.title?.length > 30 ? '...' : ''}`
+                        : `ℹ️ Existing tender: ${latestVersion?.data?.brief?.title?.substring(0, 30) || 'Unnamed'}${latestVersion?.data?.brief?.title?.length > 30 ? '...' : ''}`
+                  })}\n\n`));
 
                   processedCount++; // Increment counter
                   
                   // Stream the data
                   const message = `data: ${JSON.stringify(tenderData)}\n\n`;
                   // console.log(`📤 Streaming tender: ${tenderId}`, tenderData);
-                  controller.enqueue(new TextEncoder().encode(message));
+                  controller.enqueue(encoder.encode(message));
                 } else {
                   console.log(`⚠️ No saved tender found for: ${tenderId}`);
                 }
               } catch (error) {
                 console.error(`❌ Error processing tender ${tenderId}:`, error);
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'progress',
+                  current: i + 1,
+                  total: keywords.length,
+                  log: `❌ Error searching keyword "${keyword}": ${error instanceof Error ? error.message : String(error)}`
+                })}\n\n`));
               }
             }
           }
           
           console.log('\n✨ Finished processing all keywords');
           // Send completion message with total found and processed counts
-          controller.enqueue(
-            new TextEncoder().encode(
-              `data: ${JSON.stringify({
-                type: "complete",
-                totalFound,
-                processedCount
-              })}\n\n`
-            )
-          );
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'complete',
+            totalFound,
+            processedCount,
+            log: `🏁 Search completed: ${totalFound} tenders found, ${processedCount} within date range`
+          })}\n\n`));
           controller.close();
         } catch (error) {
           console.error('❌ Stream processing error:', error);

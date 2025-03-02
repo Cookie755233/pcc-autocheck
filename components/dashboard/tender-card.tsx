@@ -322,9 +322,9 @@ export function TenderCard({
             "group relative cursor-pointer w-full h-[280px]",
             "hover:shadow-md transition-all duration-200",
             (isArchiving || isRemoving) && "animate-fade-out",
-            tender.isHighlighted && "shadow-[0px_0px_8px_2px_rgba(250,204,21,0.5)] border-yellow-400",
+            tender.isHighlighted && "shadow-[0px_0px_12px_4px_rgba(250,204,21,0.4)] dark:shadow-[0px_0px_12px_4px_rgba(250,204,21,0.4)] border-yellow-400",
             tender.isArchived && "opacity-75",
-            isNew && "shadow-[0px_0px_12px_3px_rgba(59,130,246,0.3)] border-blue-400/50"
+            isNew && "shadow-[0px_0px_12px_3px_rgba(59,130,246,0.3)] dark:shadow-[0px_0px_12px_3px_rgba(59,130,246,0.3)] border-blue-400/50"
           )}
           onClick={handleCardOpen}
           data-tender-id={tender.job_number}

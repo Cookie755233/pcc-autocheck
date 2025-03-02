@@ -7,11 +7,20 @@ TenderWatch is a web application that helps users track and monitor government p
 - **Keyword-based Subscription**: Subscribe to tenders by adding keywords of interest
 - **Automatic Tender Fetching**: Automatically checks for new tenders from the government procurement API
 - **Kanban Board View**: Organize tenders in an intuitive board layout
+- **Real-time Processing Logs**: 
+  - Detailed color-coded logs showing search progress
+  - Visual indicators for new, updated, and existing tenders
+  - Collapsible log interface for clean UX
+- **Smart Notifications**: 
+  - Only notify for new tenders or tenders with new versions
+  - Clear visual indicators for unread items
+  - Batch actions for managing notifications
 - **Advanced Filtering System**:
   - Filter by organization/bureau
   - Filter by tender type
   - Date range filtering
   - Global search for tender titles
+  - Keyword focus/hide options
   - Clear filters with one click
 - **Tender Management**:
   - Archive/unarchive tenders
@@ -23,6 +32,7 @@ TenderWatch is a web application that helps users track and monitor government p
   - Export to PDF with customizable quality settings
   - Progress tracking for large exports
 - **User Authentication**: Secure login with Google accounts via Clerk
+- **Full Dark Mode Support**: Complete dark mode styling across all components
 
 ## Tech Stack
 
@@ -34,6 +44,7 @@ TenderWatch is a web application that helps users track and monitor government p
 - **PDF Generation**: jsPDF, html2canvas
 - **State Management**: React hooks, Context API
 - **Date Handling**: date-fns with locale support
+- **Toast Notifications**: Custom-styled contextual toast system with variants (success, error, warning, info)
 
 ## Getting Started
 
@@ -103,6 +114,8 @@ tenderwatch/
 │   │   └── export-button.tsx   # Export functionality
 │   ├── ui/               # Shadcn UI components
 │   └── ...
+├── contexts/             # Context providers
+│   └── notification-context.tsx # Notification management
 ├── lib/                  # Utility functions and shared code
 │   ├── date-utils.ts     # Date formatting utilities
 │   └── events/           # Event handling
@@ -112,20 +125,47 @@ tenderwatch/
     └── tender.ts         # Tender-related type definitions
 ```
 
+## User Interface Features
+
+### Enhanced Logging System
+- **Color-coded logs**: Green for new items, blue for updates, amber for warnings, red for errors
+- **Detailed process information**: See which keywords are being processed
+- **Real-time updates**: Follow the search progress as it happens
+- **Collapsible detail view**: Keep the UI clean with expandable logs
+
+### Smart Notifications
+- **Intelligent triggering**: Only notifies when there's truly new content
+- **Status tracking**: Clearly indicates which tenders are new or updated
+- **Batch management**: Mark all as read with a single click
+
+### Contextual Toast Notifications
+- **Variant styling**: Different styles for success, error, warning, and info messages
+- **Dark mode support**: Proper contrast in both light and dark themes
+- **Clear messaging**: Descriptive titles and details for user feedback
+
+### Dark Mode Support
+- **Complete theme integration**: All components styled for both light and dark modes
+- **Proper contrast**: Carefully selected colors for readability in all lighting conditions
+- **Consistent design language**: Maintains visual harmony across the entire application
+
 ## Usage
 
 1. **Login**: Sign in with your Google account
 2. **Add Keywords**: Enter keywords related to tenders you're interested in
 3. **Fetch Tenders**: Click "Fetch New Tenders" to search for matching tenders
-4. **Filter Results**: 
+4. **Monitor Progress**: 
+   - Watch the progress bar and detailed logs during search
+   - See color-coded results as they come in
+5. **Filter Results**: 
    - Use the filter panel to narrow down by organization or type
    - Use the search box to find tenders by title
    - Filter by date range using the slider
-5. **Organize Tenders**: 
+   - Focus on or hide specific keywords
+6. **Organize Tenders**: 
    - Archive tenders you're not interested in
    - Highlight important tenders
    - View tender details by clicking on a card
-6. **Export Data**:
+7. **Export Data**:
    - Export filtered tenders to JSON, text, or PDF
    - Share tender information with colleagues
 

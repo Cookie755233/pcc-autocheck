@@ -51,6 +51,8 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
     inDateRange: 0,
     addedToBoard: 0
   });
+  const [processingLog, setProcessingLog] = useState<string[]>([]);
+  const [isLogExpanded, setIsLogExpanded] = useState(false);
 
   const fetchKeywords = async () => {
     if (!user?.id) return;
@@ -232,6 +234,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       inDateRange: 0,
       addedToBoard: 0
     });
+    setProcessingLog([]); // Clear previous logs
 
     try {
       const activeKeywordTexts = keywords
@@ -284,6 +287,15 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                   current: data.current,
                   total: data.total
                 });
+                
+                // Add log entry if log message is provided
+                if (data.log) {
+                  setProcessingLog(prev => {
+                    const newLogs = [...prev, data.log];
+                    // Keep only the last 100 logs to prevent memory issues
+                    return newLogs.slice(-100);
+                  });
+                }
               } 
               else if (data.type === 'complete') {
                 console.log("🏁 Search complete:", data);
@@ -317,6 +329,18 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
               else if (data.tender) { // It's a tender
                 console.log("🎯 Processing tender:", data);
                 
+                // Add to processing log
+                setProcessingLog(prev => {
+                  const tenderId = data.tender.id || "unknown";
+                  const title = data.tender.title || "Unnamed tender";
+                  
+                  // We no longer need to add logs here as they now come directly from the server
+                  // with detailed status information
+                  
+                  const newLogs = [...prev];
+                  return newLogs.slice(-100);
+                });
+                
                 // First notify parent component
                 if (onTendersFound) {
                   onTendersFound([data]);
@@ -328,8 +352,9 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                     ...data,
                     tender: {
                       ...data.tender,
-                      // Don't set isNew here, let the NotificationContext handle it
-                    }
+                    },
+                    isNew: data.isNew,
+                    hasNewVersions: data.hasNewVersions
                   }
                 });
                 window.dispatchEvent(event);
@@ -438,6 +463,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       toast({
         title: "Keywords deactivated",
         description: "All keywords have been deactivated successfully.",
+        variant: "success",
       });
     } catch (error) {
       console.error("Failed to deactivate keywords:", error);
@@ -481,6 +507,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       toast({
         title: "Keywords activated",
         description: "All keywords have been activated successfully.",
+        variant: "success",
       });
     } catch (error) {
       console.error("Failed to activate keywords:", error);
@@ -496,8 +523,10 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
 
   return (
     <div className={cn(
-      "p-4 border rounded-lg bg-white shadow-sm sticky top-4", 
+      "p-4 border rounded-lg",
       "h-[87vh] flex flex-col",
+      "bg-white shadow-sm",
+      "dark:bg-gray-900/50 dark:border-gray-800 dark:shadow-[0_2px_10px_rgba(255,255,255,0.05)]",
       className
     )}>
       <div className="flex items-center justify-between mb-4">
@@ -510,6 +539,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
               ? handleCloseAllKeywords 
               : handleActivateAllKeywords}
             disabled={isLoading}
+            className="dark:border-gray-700 dark:hover:bg-gray-800"
           >
             {keywords.every(k => k.isActive) 
               ? "Deactivate All" 
@@ -524,7 +554,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
           placeholder="Add a keyword..."
           value={newKeyword}
           onChange={(e) => setNewKeyword(e.target.value)}
-          className="flex-1"
+          className="flex-1 dark:bg-gray-800 dark:border-gray-700"
           disabled={isLoading}
         />
         <Button type="submit" disabled={isLoading || !newKeyword.trim()}>
@@ -542,14 +572,14 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       {/* Keywords list - now with flex-1 to take available space */}
       <div className="space-y-2 mb-4 overflow-y-auto flex-1">
         {keywords.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-4">
+          <div className="text-sm text-muted-foreground text-center py-4 dark:text-gray-400">
             No keywords added yet
           </div>
         ) : (
           keywords.map((keyword) => (
             <div 
               key={keyword.id}
-              className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
+              className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors dark:bg-gray-600/50 dark:hover:bg-gray-800"
               style={{ 
                 borderLeft: `4px solid ${stringToColor(keyword.text, 1, true)}` 
               }}
@@ -562,7 +592,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                 <span
                   className={cn(
                     "text-sm font-medium w-[140px] truncate",
-                    !activeKeywords.has(keyword.id) && "text-muted-foreground"
+                    !activeKeywords.has(keyword.id) && "text-muted-foreground dark:text-gray-400"
                   )}
                 >
                   {keyword.text}
@@ -576,10 +606,10 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                   className={cn(
                     "h-7 w-7 rounded-md transition-all group mr-1 relative",
                     keywordVisibility.get(keyword.text) === KeywordVisibilityState.FOCUSED 
-                      ? "bg-[rgba(255,215,0,0.6)] text-primary hover:bg-[rgba(255,215,0,1)]"
+                      ? "bg-[rgba(255,215,0,0.6)] text-primary hover:bg-[rgba(255,215,0,1)] dark:bg-[rgba(255,215,0,0.3)] dark:text-yellow-300"
                       : keywordVisibility.get(keyword.text) === KeywordVisibilityState.HIDDEN
-                        ? "bg-muted/30 text-muted-foreground hover:bg-muted/50"
-                        : "hover:bg-[rgba(255,215,0,0.4)] hover:text-primary"
+                        ? "bg-muted/30 text-muted-foreground hover:bg-muted/50 dark:bg-gray-700/50 dark:hover:bg-gray-700"
+                        : "hover:bg-[rgba(255,215,0,0.4)] hover:text-primary dark:hover:bg-[rgba(255,215,0,0.2)]"
                   )}
                   title={
                     keywordVisibility.get(keyword.text) === KeywordVisibilityState.FOCUSED
@@ -617,7 +647,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                   variant="ghost"
                   size="icon"
                   onClick={() => handleDeleteKeyword(keyword.id)}
-                  className="h-7 w-7 rounded-md transition-all hover:bg-destructive hover:text-destructive-foreground group"
+                  className="h-7 w-7 rounded-md transition-all hover:bg-destructive hover:text-destructive-foreground group dark:hover:bg-destructive/70"
                 >
                   <X className="h-4 w-4 transition-transform group-hover:scale-110" />
                 </Button>
@@ -628,20 +658,20 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       </div>
       
       {/* Separator line */}
-      <Separator className="my-4" />
+      <Separator className="my-4 dark:bg-gray-700" />
       
       {/* Date range filter and fetch button - now in a more compact layout */}
       <div className="mt-auto">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-medium">Search within:</span>
+          <span className="text-sm font-medium dark:text-gray-300">Search within:</span>
           <Select
             value={dateRangeMonths.toString()}
             onValueChange={(value) => setDateRangeMonths(parseInt(value))}
           >
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[120px] dark:bg-gray-800 dark:border-gray-700">
               <SelectValue placeholder="Select time range" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
               <SelectItem value="1">1 month</SelectItem>
               <SelectItem value="3">3 months</SelectItem>
               <SelectItem value="6">6 months</SelectItem>
@@ -674,7 +704,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
 
       {isFetching && (
         <div className="mt-2">
-          <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+          <div className="h-1 w-full bg-muted rounded-full overflow-hidden dark:bg-gray-700">
             <div 
               className="h-full bg-primary transition-all duration-300 ease-in-out"
               style={{ 
@@ -684,19 +714,69 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
               }}
             />
           </div>
-          <p className="text-xs text-muted-foreground mt-1 text-center">
-            {fetchProgress.current > 0 
-              ? (() => {
-                  // Get array of active keyword IDs
-                  const activeKeywordIds = Array.from(activeKeywords);
-                  // Get the current keyword ID (adjusting for 0-based index)
-                  const currentKeywordId = activeKeywordIds[fetchProgress.current - 1];
-                  // Find the keyword text
-                  const currentKeyword = keywords.find(k => k.id === currentKeywordId)?.text || '';
-                  return `🔍 "${currentKeyword}" (${fetchProgress.current}/${fetchProgress.total})`;
-                })()
-              : 'Preparing search...'}
-          </p>
+          <div className="mt-1 text-xs text-muted-foreground dark:text-gray-400 flex flex-col">
+            <div className="flex justify-between items-center">
+              <p>
+                {fetchProgress.current > 0 
+                  ? (() => {
+                      // Get array of active keyword IDs
+                      const activeKeywordIds = Array.from(activeKeywords);
+                      // Get the current keyword ID (adjusting for 0-based index)
+                      const currentKeywordId = activeKeywordIds[fetchProgress.current - 1];
+                      // Find the keyword text
+                      const currentKeyword = keywords.find(k => k.id === currentKeywordId)?.text || '';
+                      return `🔍 "${currentKeyword}" (${fetchProgress.current}/${fetchProgress.total})`;
+                    })()
+                  : 'Preparing search...'}
+              </p>
+              
+              {/* Toggle for log display */}
+              {processingLog.length > 0 && (
+                <button 
+                  className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                  onClick={() => setIsLogExpanded(prev => !prev)}
+                  type="button"
+                >
+                  {isLogExpanded ? 'Hide details' : 'Show details'}
+                </button>
+              )}
+            </div>
+            
+            {/* Scrollable log area */}
+            {isLogExpanded && processingLog.length > 0 && (
+              <div className="mt-2 border rounded p-2 bg-black/5 dark:bg-white/5 h-24 overflow-y-auto text-[10px] font-mono">
+                {processingLog.map((log, index) => (
+                  <div 
+                    key={index} 
+                    className={cn(
+                      "whitespace-pre-wrap break-all mb-0.5",
+                      log.startsWith('🆕') && "text-green-600 dark:text-green-400 font-medium",
+                      log.startsWith('✅') && "text-green-500 dark:text-green-400",
+                      log.startsWith('📝') && "text-blue-600 dark:text-blue-400",
+                      log.startsWith('ℹ️') && "text-gray-600 dark:text-gray-400",
+                      log.startsWith('📋') && "text-gray-500 dark:text-gray-500",
+                      log.startsWith('⚠️') && "text-amber-600 dark:text-amber-400",
+                      log.startsWith('❌') && "text-red-600 dark:text-red-400"
+                    )}
+                  >
+                    {log}
+                  </div>
+                ))}
+                <div ref={el => {
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }} />
+              </div>
+            )}
+            
+            {/* Stats summary */}
+            {searchStats.addedToBoard > 0 && (
+              <p className="text-green-600 dark:text-green-400 mt-0.5 text-center">
+                Found {searchStats.addedToBoard} tenders matching your keywords
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

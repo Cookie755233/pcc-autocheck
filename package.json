@@ -57,7 +57,8 @@
     "reset-db": "ts-node -P scripts/tsconfig.json scripts/reset-db.ts",
     "db:push": "prisma db push",
     "db:reset": "npm run db:push && npm run reset-db",
-    "cleanup": "NODE_PATH=./ ts-node -r tsconfig-paths/register scripts/cleanup-tenders.ts",
+    "cleanup": "ts-node scripts/cleanup-tenders.ts",
+    "cleanup:user": "ts-node scripts/cleanup-user-tenders.ts",
     "debug:tender": "ts-node scripts/debug-tender.ts"
   }
 }

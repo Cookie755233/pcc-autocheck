@@ -4,7 +4,7 @@ import * as React from "react"
 import { UserButton } from "@clerk/nextjs"
 import { ModeToggle } from "@/components/ui/mode-toggle"
 import Link from "next/link"
-import { Bell, PieChart, LayoutDashboard } from "lucide-react"
+import { Bell, LayoutDashboard, BarChartHorizontal } from "lucide-react"
 import { useNotifications } from "@/contexts/notification-context"
 import { useRouter, usePathname } from "next/navigation"
 import {
@@ -62,7 +62,7 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen flex-col">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:border-gray-800 dark:bg-gray-900/50">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-8">
             <Link 
@@ -82,11 +82,11 @@ export default function DashboardLayout({
               size="icon"
               className={cn(
                 "relative",
-                pathname === "/dashboard/statistics" && "bg-accent"
+                pathname === "/dashboard/statistics" && "bg-accent dark:bg-accent/30"
               )}
               onClick={() => router.push('/dashboard/statistics')}
             >
-              <PieChart className="h-5 w-5" />
+              <BarChartHorizontal className="h-5 w-5" />
               <span className="sr-only">Statistics View</span>
             </Button>
             
@@ -96,7 +96,7 @@ export default function DashboardLayout({
               size="icon"
               className={cn(
                 "relative",
-                pathname === "/dashboard" && "bg-accent"
+                pathname === "/dashboard" && "bg-accent dark:bg-accent/30"
               )}
               onClick={() => router.push('/dashboard')}
             >
@@ -120,7 +120,7 @@ export default function DashboardLayout({
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuContent align="end" className="w-80 dark:border-gray-800">
                 <div className="flex items-center justify-between px-4 py-2">
                   <h3 className="font-semibold">Notifications</h3>
                   {hasUnreadNotifications && (
@@ -135,7 +135,7 @@ export default function DashboardLayout({
                   )}
                 </div>
                 
-                <div className="h-px bg-border" />
+                <div className="h-px bg-border dark:bg-gray-800" />
                 
                 {notifications.length === 0 ? (
                   <div className="py-4 px-2 text-center text-sm text-muted-foreground">
@@ -146,7 +146,7 @@ export default function DashboardLayout({
                     {notifications.map((tender) => (
                       <DropdownMenuItem 
                         key={tender.tender.id}
-                        className="p-3 cursor-pointer"
+                        className="p-3 cursor-pointer hover:bg-accent/80 dark:hover:bg-accent/20"
                         onClick={() => handleNotificationClick(tender.tender.id)}
                       >
                         <div className="flex flex-col gap-1">
