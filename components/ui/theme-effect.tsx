@@ -33,10 +33,10 @@ export function ThemeEffect() {
         // Remove the transition class after theme change completes
         const cleanupTimer = setTimeout(() => {
           document.body.classList.remove('theme-changing')
-        }, 300)
+        }, 0)
         
         return () => clearTimeout(cleanupTimer)
-      }, 1500)
+      }, 1600)
       
       return () => clearTimeout(timer)
     }
@@ -113,18 +113,7 @@ export function ThemeEffect() {
           />
         ))}
       </div>
-      
-      {/* Path reference (for development, can be hidden) */}
-      {/* <svg className="absolute inset-0 w-full h-full pointer-events-none">
-        <path
-          id="motion-path"
-          d="M 250,800 Q 900,0 1650,850"
-          fill="none"
-          stroke="rgba(255,255,255,0.1)"
-          strokeWidth="2"
-        />
-      </svg> */}
-      
+
       {/* Celestial Body - Simple Div Approach */}
       {goingToDark && (
         <div className="celestial-body sun-to-moon">
@@ -161,7 +150,7 @@ export function ThemeEffect() {
           position: absolute;
           width: 80px;
           height: 80px;
-          offset-path: path("M 250,800 Q 900,0 1650,850");
+          offset-path: path("M 500,800 Q 1050,0 1600,850");
           animation: follow-path 1.5s ease-in-out forwards;
           will-change: offset-distance;
         }

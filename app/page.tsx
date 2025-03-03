@@ -3,8 +3,6 @@ import { SignInButton } from "@clerk/nextjs"
 import { auth } from "@clerk/nextjs/server"
 import { ArrowRight, Search, Bell, Archive, FileText, Filter, RefreshCw } from "lucide-react"
 import Link from "next/link"
-import { redirect } from "next/navigation"
-import { useEffect } from "react"
 import { NavLinks } from "@/components/landing/nav-links"
 import { LearnMoreButton } from "@/components/landing/learn-more-button"
 import { UserButton } from "@clerk/nextjs"
@@ -19,7 +17,7 @@ export default async function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Navigation - Fixed at top */}
-      <nav className="sticky top-0 w-full z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <nav className="sticky top-0 w-full z-50 border-b backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-8">
             <Link 
