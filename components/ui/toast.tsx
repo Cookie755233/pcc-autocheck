@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
-import { X, CheckCircle, AlertTriangle, AlertCircle, Info } from "lucide-react"
+import { X, CheckCircle, AlertTriangle, AlertCircle, Info, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ToastVariant } from "./use-toast"
 
@@ -39,6 +39,8 @@ const toastVariants = cva(
           "border-l-4 border-yellow-600 bg-white text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-yellow-500 shadow-[0_0_0_1px_rgba(234,179,8,0.1),0_1px_2px_0_rgba(234,179,8,0.1)]",
         info: 
           "border-l-4 border-blue-600 bg-white text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-blue-500 shadow-[0_0_0_1px_rgba(59,130,246,0.1),0_1px_2px_0_rgba(59,130,246,0.1)]",
+        hype: 
+          "border-l-4 border-purple-600 bg-white text-foreground dark:bg-gray-800 dark:text-gray-100 dark:border-purple-500 shadow-[0_0_0_1px_rgba(147,51,234,0.1),0_1px_2px_0_rgba(147,51,234,0.1)] data-[state=open]:animate-bounce-in",
       },
     },
     defaultVariants: {
@@ -143,6 +145,8 @@ export const ToastIcon = ({
       return <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
     case "info":
       return <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />;
+    case "hype":
+      return <Zap className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-pulse" />;
     default:
       return null;
   }

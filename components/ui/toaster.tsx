@@ -28,7 +28,8 @@ export function Toaster() {
                     props.variant === "destructive" ? "text-red-900 dark:text-red-50" : 
                     props.variant === "success" ? "text-green-900 dark:text-green-50" :
                     props.variant === "warning" ? "text-yellow-900 dark:text-yellow-50" :
-                    props.variant === "info" ? "text-blue-900 dark:text-blue-50" : ""
+                    props.variant === "info" ? "text-blue-900 dark:text-blue-50" :
+                    props.variant === "hype" ? "text-purple-900 dark:text-purple-50" : ""
                   }>{title}</ToastTitle>
                 </div>
               )}
@@ -37,7 +38,8 @@ export function Toaster() {
                   props.variant === "destructive" ? "text-red-700 dark:text-red-100 pl-7" : 
                   props.variant === "success" ? "text-green-700 dark:text-green-100 pl-7" :
                   props.variant === "warning" ? "text-yellow-700 dark:text-yellow-100 pl-7" :
-                  props.variant === "info" ? "text-blue-700 dark:text-blue-100 pl-7" : ""
+                  props.variant === "info" ? "text-blue-700 dark:text-blue-100 pl-7" :
+                  props.variant === "hype" ? "text-purple-700 dark:text-purple-100 pl-7" : ""
                 }>{description}</ToastDescription>
               )}
             </div>

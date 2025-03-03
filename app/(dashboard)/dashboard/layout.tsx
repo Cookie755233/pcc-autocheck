@@ -4,7 +4,7 @@ import * as React from "react"
 import { UserButton } from "@clerk/nextjs"
 import { ModeToggle } from "@/components/ui/mode-toggle"
 import Link from "next/link"
-import { Bell, LayoutDashboard, BarChartHorizontal } from "lucide-react"
+import { Bell, LayoutDashboard, BarChartHorizontal, Settings } from "lucide-react"
 import { useNotifications } from "@/contexts/notification-context"
 import { useRouter, usePathname } from "next/navigation"
 import {
@@ -163,6 +163,21 @@ export default function DashboardLayout({
             </DropdownMenu>
             
             <ModeToggle />
+            
+            {/* Settings Button - Added before UserButton */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "relative",
+                pathname === "/dashboard/settings" && "bg-accent dark:bg-accent/30"
+              )}
+              onClick={() => router.push('/dashboard/settings')}
+            >
+              <Settings className="h-5 w-5" />
+              <span className="sr-only">Settings</span>
+            </Button>
+            
             <UserButton afterSignOutUrl="/" />
           </div>
         </div>

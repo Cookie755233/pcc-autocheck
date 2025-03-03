@@ -7,6 +7,14 @@ TenderWatch is a web application that helps users track and monitor government p
 - **Keyword-based Subscription**: Subscribe to tenders by adding keywords of interest
 - **Automatic Tender Fetching**: Automatically checks for new tenders from the government procurement API
 - **Kanban Board View**: Organize tenders in an intuitive board layout
+- **Timeline Visualization**:
+  - Interactive chronological view of all tenders by keyword
+  - Horizontally scrollable timeline with sticky headers
+  - Color-coded tender types for easy identification
+  - Zoom and filter controls for exploring tender data
+  - Detailed hover cards with tender information
+  - Monthly/yearly view options for different time scales
+  - Support for highlighting important tenders
 - **Real-time Processing Logs**: 
   - Detailed color-coded logs showing search progress
   - Visual indicators for new, updated, and existing tenders
@@ -41,9 +49,9 @@ TenderWatch is a web application that helps users track and monitor government p
 - **Authentication**: Clerk
 - **Database**: Prisma ORM
 - **API**: Integration with Taiwan government procurement API
+- **Date Handling**: date-fns with ROC calendar support
 - **PDF Generation**: jsPDF, html2canvas
 - **State Management**: React hooks, Context API
-- **Date Handling**: date-fns with locale support
 - **Toast Notifications**: Custom-styled contextual toast system with variants (success, error, warning, info)
 
 ## Getting Started
@@ -105,6 +113,7 @@ tenderwatch/
 │   ├── api/              # API routes
 │   │   └── tenders/      # Tender-related API endpoints
 │   ├── dashboard/        # Dashboard page
+│   │   └── statistics/   # Timeline visualization
 │   └── ...
 ├── components/           # React components
 │   ├── dashboard/        # Dashboard-specific components
@@ -126,6 +135,14 @@ tenderwatch/
 ```
 
 ## User Interface Features
+
+### Timeline Visualization
+- **Chronological view**: Visualize all tenders in a timeline format organized by keywords
+- **Interactive controls**: Zoom in/out, switch between monthly and yearly views
+- **Filtering capabilities**: Focus on specific tender types or highlight important tenders
+- **Responsive design**: Works on different screen sizes with horizontal scrolling
+- **Detailed hover cards**: Quick access to tender information without opening full details
+- **Date parsing**: Supports various date formats including ROC dates (民國)
 
 ### Enhanced Logging System
 - **Color-coded logs**: Green for new items, blue for updates, amber for warnings, red for errors
@@ -156,16 +173,21 @@ tenderwatch/
 4. **Monitor Progress**: 
    - Watch the progress bar and detailed logs during search
    - See color-coded results as they come in
-5. **Filter Results**: 
+5. **Visualize Timeline**:
+   - Navigate to the Statistics page to see your tenders on a timeline
+   - Use zoom controls to adjust the time scale
+   - Filter by tender type or highlight important tenders
+   - Hover over tender bars to see details or click to open full information
+6. **Filter Results**: 
    - Use the filter panel to narrow down by organization or type
    - Use the search box to find tenders by title
    - Filter by date range using the slider
    - Focus on or hide specific keywords
-6. **Organize Tenders**: 
+7. **Organize Tenders**: 
    - Archive tenders you're not interested in
    - Highlight important tenders
    - View tender details by clicking on a card
-7. **Export Data**:
+8. **Export Data**:
    - Export filtered tenders to JSON, text, or PDF
    - Share tender information with colleagues
 

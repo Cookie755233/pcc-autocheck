@@ -189,12 +189,13 @@ function useToast() {
     warning: (props: Omit<Toast, "variant">) => toast({ ...props, variant: "warning" }),
     info: (props: Omit<Toast, "variant">) => toast({ ...props, variant: "info" }),
     error: (props: Omit<Toast, "variant">) => toast({ ...props, variant: "destructive" }),
+    hype: (props: Omit<Toast, "variant">) => toast({ ...props, variant: "hype" }),
   }
 }
 
 export { useToast, toast }
 
-export type ToastVariant = 'default' | 'destructive' | 'success' | 'info' | 'warning';
+export type ToastVariant = 'default' | 'destructive' | 'success' | 'info' | 'warning' | 'hype';
 
 export interface ToastProps {
   variant?: ToastVariant;
@@ -211,6 +212,8 @@ const getVariantStyle = (variant: ToastVariant = 'default') => {
       return 'info group border-blue-500 bg-blue-500 text-white';
     case 'warning':
       return 'warning group border-yellow-500 bg-yellow-500 text-white';
+    case 'hype':
+      return 'hype group border-purple-500 bg-purple-500 text-white';
     default:
       return 'group border-border bg-background text-foreground';
   }

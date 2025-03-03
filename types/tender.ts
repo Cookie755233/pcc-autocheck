@@ -28,6 +28,9 @@ export interface Tender {
   job_number: string;
   date: number;
   title: string;
+  type?: string;
+  startDate?: string | number;
+  endDate?: string | number;
   isArchived: boolean;
   isHighlighted: boolean;
   isNew?: boolean;

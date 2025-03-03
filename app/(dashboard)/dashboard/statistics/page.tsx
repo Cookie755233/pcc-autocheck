@@ -24,12 +24,21 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { Minus, Plus } from "lucide-react"
+import { Minus, Plus, ChevronUp, ChevronDown, ChevronRight } from "lucide-react"
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import { LineChart } from "lucide-react"
 
 // Add color mapping for different tender types
 const TYPE_COLORS = {
@@ -53,38 +62,137 @@ const TYPE_COLORS = {
 
 } as const;
 
-// Add this constant at the top with other constants
-function getTenderDates(version: any) {
-  const detail = version.data?.detail || {};
-  const type = version.type || '';
+// Helper function to safely parse dates
+function parseTenderDate(dateStr: string | number | undefined): Date {
+  if (!dateStr) return new Date();
+  
+  try {
+    //! Debug log for date parsing
+    // console.log("Parsing date:", dateStr);
+    
+    // Handle ROC date format (e.g., "113/10/24" or "113/1/1 17:00")
+    if (typeof dateStr === 'string') {
+      // Check for ROC date format with optional time
+      const rocDateTimeRegex = /^(\d{1,3})\/(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?$/;
+      const match = dateStr.match(rocDateTimeRegex);
+      if (match) {
+        const [_, yearStr, monthStr, dayStr, hourStr, minuteStr] = match;
+        const year = parseInt(yearStr) + 1911; // Convert ROC year to Gregorian
+        const month = parseInt(monthStr) - 1; // JS months are 0-indexed
+        const day = parseInt(dayStr);
+        
+        // Create date with or without time component
+        if (hourStr && minuteStr) {
+          const hour = parseInt(hourStr);
+          const minute = parseInt(minuteStr);
+          const date = new Date(year, month, day, hour, minute);
+          // console.log(`Parsed ROC date with time: ${dateStr} → ${date.toISOString()}`);
+          return isNaN(date.getTime()) ? new Date() : date;
+        } else {
+          const date = new Date(year, month, day);
+          // console.log(`Parsed ROC date: ${dateStr} → ${date.toISOString()}`);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }
+      }
+      
+      // Handle YYYYMMDD format
+      if (/^\d{8}$/.test(dateStr)) {
+        const year = parseInt(dateStr.substring(0, 4));
+        const month = parseInt(dateStr.substring(4, 6)) - 1;
+        const day = parseInt(dateStr.substring(6, 8));
+        const date = new Date(year, month, day);
+        // console.log(`Parsed YYYYMMDD date: ${dateStr} → ${date.toISOString()}`);
+        return isNaN(date.getTime()) ? new Date() : date;
+      }
+      
+      // Handle ISO date strings
+      if (dateStr.includes('T') || dateStr.includes('-')) {
+        try {
+          const date = new Date(dateStr);
+          // console.log(`Parsed ISO date: ${dateStr} → ${date.toISOString()}`);
+          return isNaN(date.getTime()) ? new Date() : date;
+        } catch (error) {
+          console.error("Failed to parse ISO date:", dateStr, error);
+        }
+      }
+    }
+    
+    // Handle number (timestamp)
+    if (typeof dateStr === 'number') {
+      // Check if it's a timestamp (milliseconds since epoch)
+      if (dateStr > 1000000000000) { // Likely a JS timestamp (milliseconds)
+        const date = new Date(dateStr);
+        // console.log(`Parsed timestamp (ms): ${dateStr} → ${date.toISOString()}`);
+        return isNaN(date.getTime()) ? new Date() : date;
+      }
+      
+      // Check if it's a YYYYMMDD format number
+      if (dateStr >= 19000101 && dateStr <= 21000101) {
+        const dateString = dateStr.toString();
+        const year = parseInt(dateString.substring(0, 4));
+        const month = parseInt(dateString.substring(4, 6)) - 1;
+        const day = parseInt(dateString.substring(6, 8));
+        const date = new Date(year, month, day);
+        // console.log(`Parsed YYYYMMDD number: ${dateStr} → ${date.toISOString()}`);
+        return isNaN(date.getTime()) ? new Date() : date;
+      }
+      
+      // Assume it's a Unix timestamp (seconds since epoch)
+      const date = new Date(dateStr * 1000);
+      // console.log(`Parsed timestamp (s): ${dateStr} → ${date.toISOString()}`);
+      return isNaN(date.getTime()) ? new Date() : date;
+    }
+    
+    // If all else fails, return current date
+    console.warn("Could not parse date, using current date:", dateStr);
+    return new Date();
+  } catch (error) {
+    console.error("Error parsing date:", dateStr, error);
+    return new Date();
+  }
+}
 
+// Function to extract dates from tender versions
+function getTenderDates(version: any) {
+  const detail = version?.data?.detail || {};
+  const type = version?.type || '';
+  const startDate = version?.date;
+  
+  // Default end date is undefined, not a future date
+  let endDate = undefined;
+  
   if (type.includes('招標')) {
+    endDate = detail['領投開標:截止投標'];
     return {
-      startDate: detail['招標資料:公告日'],
-      endDate: detail['領投開標:截止投標']
+      startDate: detail['招標資料:公告日'] || startDate,
+      endDate: endDate
     };
   } 
   if (type.includes('決標')) {
+    endDate = detail['決標資料:決標公告日期'];
     return {
-      startDate: detail['已公告資料:原公告日期'],
-      endDate: detail['決標資料:決標公告日期']
+      startDate: detail['已公告資料:原公告日期'] || startDate,
+      endDate: endDate
     };
   } 
   if (type.includes('無法決標')) {
+    endDate = detail['無法決標公告:無法決標公告日期'];
     return {
-      startDate: detail['無法決標公告:原招標公告之刊登採購公報日期'],
-      endDate: detail['無法決標公告:無法決標公告日期']
+      startDate: detail['無法決標公告:原招標公告之刊登採購公報日期'] || startDate,
+      endDate: endDate
     };
   }
   if (type.includes('出租')) {
+    endDate = detail['標案內容:截標時間'];
     return {
-      startDate: version.date || detail['標案內容:截標時間'],
-      endDate: detail['標案內容:截標時間']
+      startDate: startDate || detail['標案內容:截標時間'],
+      endDate: endDate
     };
   }
 
+  //? Default fall-through - only use the date we know is valid
   return {
-    startDate: version.date,
+    startDate: startDate,
     endDate: undefined
   };
 }
@@ -102,66 +210,13 @@ export default function StatisticsPage() {
   const [viewMode, setViewMode] = useState<'months' | 'years'>('months');
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [showHighlightedOnly, setShowHighlightedOnly] = useState(false);
+  const [showDeprecatedTenders, setShowDeprecatedTenders] = useState(false);
   
   // Add refs for the intersections
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const monthHeadersRef = useRef<HTMLDivElement>(null);
   const timelineContentRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  // Helper function to safely parse dates
-  function parseTenderDate(dateStr: string | number | undefined): Date {
-    if (!dateStr) return new Date();
-    
-    try {
-      //! Debug log for date parsing
-      console.log("Parsing date:", dateStr);
-      
-      // Handle ROC date format (e.g., "113/10/24" or "113/1/1 17:00")
-      if (typeof dateStr === 'string') {
-        // Check for ROC date format with optional time
-        const rocDateTimeRegex = /^(\d{1,3})\/(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?$/;
-        const match = dateStr.match(rocDateTimeRegex);
-        
-        if (match) {
-          const [_, yearStr, monthStr, dayStr, hourStr, minuteStr] = match;
-          const year = parseInt(yearStr) + 1911; // Convert ROC year to Gregorian
-          const month = parseInt(monthStr) - 1; // JS months are 0-indexed
-          const day = parseInt(dayStr);
-          
-          // Create date with or without time component
-          if (hourStr && minuteStr) {
-            const hour = parseInt(hourStr);
-            const minute = parseInt(minuteStr);
-            const date = new Date(year, month, day, hour, minute);
-            // console.log(`Parsed ROC date with time: ${dateStr} → ${date.toISOString()}`);
-            return isNaN(date.getTime()) ? new Date() : date;
-          } else {
-            const date = new Date(year, month, day);
-            // console.log(`Parsed ROC date: ${dateStr} → ${date.toISOString()}`);
-            return isNaN(date.getTime()) ? new Date() : date;
-          }
-        }
-        
-        // Handle YYYYMMDD format
-        if (/^\d{8}$/.test(dateStr)) {
-          const year = parseInt(dateStr.substring(0, 4));
-          const month = parseInt(dateStr.substring(4, 6)) - 1;
-          const day = parseInt(dateStr.substring(6, 8));
-          const date = new Date(year, month, day);
-          console.log(`Parsed YYYYMMDD date: ${dateStr} → ${date.toISOString()}`);
-          return isNaN(date.getTime()) ? new Date() : date;
-        }
-      }
-
-      // Fallback to default date
-      console.log(`Could not parse date: ${dateStr}, using current date`);
-      return new Date();
-    } catch (error) {
-      console.error("Error parsing date:", dateStr, error);
-      return new Date();
-    }
-  }
 
   // Fetch tenders from the database
   useEffect(() => {
@@ -206,7 +261,41 @@ export default function StatisticsPage() {
   const formattedTenders = useMemo(() => {
     console.log("Raw tenders:", localTenders);
     
-    const formatted = localTenders.map(group => {
+    //? First filter tenders by active keywords to avoid unnecessary processing
+    const activeTenders: TenderGroup[] = [];
+    const deprecatedTenders: TenderGroup[] = [];
+    
+    localTenders.forEach(group => {
+      //@ Check if tender matches any active keyword
+      const tenderTitle = group.tender.title?.toLowerCase() || '';
+      const tenderType = group.tender.type?.toLowerCase() || '';
+      const tenderBrief = JSON.stringify(group.tender.brief || {}).toLowerCase();
+      
+      const matchesActiveKeyword = userKeywords.some(keyword => {
+        const lowercaseKeyword = keyword.toLowerCase();
+        return (
+          tenderTitle.includes(lowercaseKeyword) || 
+          tenderType.includes(lowercaseKeyword) || 
+          tenderBrief.includes(lowercaseKeyword)
+        );
+      });
+      
+      if (matchesActiveKeyword) {
+        activeTenders.push(group);
+      } else {
+        deprecatedTenders.push(group);
+      }
+    });
+    
+    console.log("Filtered tenders:", {
+      activeTendersCount: activeTenders.length,
+      deprecatedTendersCount: deprecatedTenders.length
+    });
+    
+    //@ Only process active tenders for the timeline - We'll handle deprecated tenders separately
+    const tendersToProcess = activeTenders;
+    
+    const formatted = tendersToProcess.map(group => {
       const versions = group.versions || [];
       const latestVersion = versions[versions.length - 1];
       const dates = getTenderDates(latestVersion);
@@ -218,7 +307,8 @@ export default function StatisticsPage() {
         endDate: dates.endDate,
         type: latestVersion?.type || 'default',
         brief: latestVersion?.data?.detail || {},
-        versions: versions
+        versions: versions,
+        isDeprecated: false // These are all active tenders
       };
       
       console.log("Processed tender:", {
@@ -226,14 +316,85 @@ export default function StatisticsPage() {
         title: tender.title,
         type: tender.type,
         startDate: tender.startDate,
-        endDate: tender.endDate
+        endDate: tender.endDate,
+        isDeprecated: tender.isDeprecated
       });
       
       return { tender, versions, relatedTenders: group.relatedTenders || [] };
     });
     
     return formatted;
-  }, [localTenders]);
+  }, [localTenders, userKeywords]); // Remove showDeprecatedTenders dependency
+
+  // Handle deprecated tenders separately
+  const formattedDeprecatedTenders = useMemo(() => {
+    if (!showDeprecatedTenders) return [];
+    
+    //@ Find tenders that don't match any active keywords
+    const deprecatedGroups = localTenders.filter(group => {
+      const tenderTitle = group.tender.title?.toLowerCase() || '';
+      const tenderType = group.tender.type?.toLowerCase() || '';
+      const tenderBrief = JSON.stringify(group.tender.brief || {}).toLowerCase();
+      
+      return !userKeywords.some(keyword => {
+        const lowercaseKeyword = keyword.toLowerCase();
+        return (
+          tenderTitle.includes(lowercaseKeyword) || 
+          tenderType.includes(lowercaseKeyword) || 
+          tenderBrief.includes(lowercaseKeyword)
+        );
+      });
+    });
+    
+    return deprecatedGroups.map(group => {
+      const versions = group.versions || [];
+      const latestVersion = versions[versions.length - 1];
+      const dates = getTenderDates(latestVersion);
+      
+      const tender = {
+        ...group.tender,
+        title: latestVersion?.data?.detail?.['採購資料:標案名稱'] || group.tender.title || 'No title',
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+        type: latestVersion?.type || 'default',
+        brief: latestVersion?.data?.detail || {},
+        versions: versions,
+        isDeprecated: true // These are deprecated tenders
+      };
+      
+      return { tender, versions, relatedTenders: group.relatedTenders || [] };
+    });
+  }, [localTenders, userKeywords, showDeprecatedTenders]);
+  
+  //@ Count of all deprecated tenders (even when not shown)
+  const deprecatedTendersCount = useMemo(() => {
+    // Get all tenders that match any active keyword
+    const activeTenderIds = new Set<string>();
+    
+    userKeywords.forEach(keyword => {
+      const lowercaseKeyword = keyword.toLowerCase();
+      localTenders.forEach(group => {
+        const tenderTitle = group.tender.title?.toLowerCase() || '';
+        const tenderType = group.tender.type?.toLowerCase() || '';
+        const tenderBrief = JSON.stringify(group.tender.brief || {}).toLowerCase();
+        
+        if (
+          tenderTitle.includes(lowercaseKeyword) || 
+          tenderType.includes(lowercaseKeyword) || 
+          tenderBrief.includes(lowercaseKeyword)
+        ) {
+          activeTenderIds.add(group.tender.id);
+        }
+      });
+    });
+    
+    // Count tenders that don't match any active keyword
+    const deprecatedCount = localTenders.filter(group => 
+      !activeTenderIds.has(group.tender.id)
+    ).length;
+    
+    return deprecatedCount;
+  }, [localTenders, userKeywords]);
 
   // Get the list of available tender types from the actual data
   const availableTenderTypes = useMemo(() => {
@@ -452,16 +613,43 @@ export default function StatisticsPage() {
   // Calculate timeline range based on tenders - MODIFIED to ensure all tenders are visible
   const timelineRange = useMemo(() => {
     const today = new Date();
+    const maxAllowedDate = addMonths(today, 6); // No tender should be more than 6 months in the future
     
     try {
       // First gather all dates from tenders to determine the full timeline range
-      const dates = formattedTenders
-        .flatMap(group => {
-          const startDate = parseTenderDate(group.tender.startDate);
-          const endDate = parseTenderDate(group.tender.endDate);
-          return [startDate, endDate];
-        })
-        .filter(date => date instanceof Date && !isNaN(date.getTime()));
+      const dates: Date[] = [];
+      
+      formattedTenders.forEach(group => {
+        // Get dates from the tender
+        let startDate = null;
+        let endDate = null;
+        
+        if (group.tender.startDate) {
+          startDate = parseTenderDate(group.tender.startDate);
+        }
+        
+        if (group.tender.endDate) {
+          endDate = parseTenderDate(group.tender.endDate);
+        }
+        
+        // Only add valid dates that aren't too far in the future
+        if (startDate instanceof Date && !isNaN(startDate.getTime()) && startDate < maxAllowedDate) {
+          dates.push(startDate);
+          // console.log(`Valid start date for tender ${group.tender.id}: ${startDate.toISOString()}`);
+        } else if (startDate instanceof Date && startDate >= maxAllowedDate) {
+          console.warn(`Ignoring suspiciously future date for tender ${group.tender.id}: ${startDate.toISOString()}`);
+        }
+        
+        if (endDate instanceof Date && !isNaN(endDate.getTime()) && endDate < maxAllowedDate) {
+          dates.push(endDate);
+          // console.log(`Valid end date for tender ${group.tender.id}: ${endDate.toISOString()}`);
+        } else if (endDate instanceof Date && endDate >= maxAllowedDate) {
+          console.warn(`Ignoring suspiciously future date for tender ${group.tender.id}: ${endDate.toISOString()}`);
+        }
+      });
+      
+      // Debug log all collected dates
+      console.log(`Collected ${dates.length} valid dates for timeline range`);
 
       // If we have valid dates, use them to determine the full range
       if (dates.length > 0) {
@@ -706,6 +894,37 @@ export default function StatisticsPage() {
     };
   };
 
+  // Extract deprecated tenders that aren't displayed in the main timeline
+  const deprecatedTenders = useMemo(() => {
+    if (!showDeprecatedTenders) return [];
+    
+    //@ Get tenders that match deprecated keywords (not in active userKeywords)
+    return formattedTenders.filter(group => group.tender.isDeprecated);
+  }, [formattedTenders, showDeprecatedTenders]);
+  
+  //@ Get all unique keywords found in deprecated tenders
+  const deprecatedKeywords = useMemo(() => {
+    if (!showDeprecatedTenders || deprecatedTenders.length === 0) return [];
+    
+    const keywords = new Set<string>();
+    const allUserKeywords = userKeywords.map(k => k.toLowerCase());
+    
+    //? Iterate through each deprecated tender's title and find potential keywords
+    deprecatedTenders.forEach(group => {
+      const title = group.tender.title?.toLowerCase() || '';
+      
+      //? Check what words could be keywords that are not in the active keywords
+      //? This is a simple heuristic - we extract words that might have been keywords
+      const words = title.split(/\s+/).filter((word: string) => 
+        word.length > 2 && !allUserKeywords.includes(word)
+      );
+      
+      words.forEach((word: string) => keywords.add(word));
+    });
+    
+    return Array.from(keywords);
+  }, [deprecatedTenders, userKeywords, showDeprecatedTenders]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
@@ -718,476 +937,531 @@ export default function StatisticsPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-[1400px] mx-auto px-4 py-6">
-      {/* Main header - Sticky */}
-      <div className="flex items-center justify-between sticky top-[64px] z-50 pb-2">
-        <h1 className="text-3xl font-bold">Tender Timeline</h1>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-muted-foreground">
-            {format(timelineRange.start, 'MMM yyyy')} - {format(timelineRange.end, 'MMM yyyy')}
-          </div>
-          
-          {/* View mode toggle */}
-          <div className="flex items-center border rounded-lg overflow-hidden">
-            <Button 
-              variant={viewMode === 'months' ? "default" : "ghost"}
-              size="sm"
-              className="rounded-none h-8"
-              onClick={() => setViewMode('months')}
-            >
-              Months
-            </Button>
-            <div className="w-[1px] h-4 bg-border" />
-            <Button 
-              variant={viewMode === 'years' ? "default" : "ghost"}
-              size="sm"
-              className="rounded-none h-8"
-              onClick={() => setViewMode('years')}
-            >
-              Years
-            </Button>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Zoom controls */}
-            <div className="flex items-center gap-1 border rounded-lg p-1 bg-white/50 dark:bg-gray-800/50 dark:border-gray-700">
+    <div className="flex flex-col min-h-screen">
+      {/* Fixed header - Always visible at the top */}
+      <div className="sticky top-[64px] z-50 pt-2">
+        <div className="max-w-[1400px] mx-auto px-4 flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Tender Timeline</h1>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-muted-foreground">
+              {format(timelineRange.start, 'MMM yyyy')} - {format(timelineRange.end, 'MMM yyyy')}
+            </div>
+            
+            {/* View mode toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
               <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-7 w-7 rounded-sm hover:bg-accent dark:hover:bg-gray-700/70"
-                onClick={() => {
-                  const newZoom = Math.max(0.5, zoomLevel - 0.25);
-                  console.log("Zoom out:", { oldZoom: zoomLevel, newZoom });
-                  setZoomLevel(newZoom);
-                }}
+                variant={viewMode === 'months' ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none h-8"
+                onClick={() => setViewMode('months')}
               >
-                <Minus className="h-4 w-4" />
+                Months
               </Button>
-              <div className="w-[1px] h-4 bg-border dark:bg-gray-700" />
+              <div className="w-[1px] h-4 bg-border" />
               <Button 
-                variant="ghost" 
-                size="icon"
-                className="h-7 w-7 hover:bg-accent dark:hover:bg-gray-700/70"
-                onClick={() => {
-                  const newZoom = Math.min(2, zoomLevel + 0.25);
-                  console.log("Zoom in:", { oldZoom: zoomLevel, newZoom });
-                  setZoomLevel(newZoom);
-                }}
+                variant={viewMode === 'years' ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none h-8"
+                onClick={() => setViewMode('years')}
               >
-                <Plus className="h-4 w-4" />
+                Years
               </Button>
             </div>
             
-            {/* Type filter dropdown */}
-            <div className="border rounded-lg overflow-hidden flex items-center h-10 bg-white/50 dark:bg-gray-800/50 dark:border-gray-700">
-              <select
-                className="h-full text-sm px-3 bg-transparent border-none focus:outline-none focus:ring-0 dark:text-gray-200"
-                value={typeFilter || ""}
-                onChange={(e) => {
-                  console.log("Type filter changed:", e.target.value);
-                  setTypeFilter(e.target.value || null);
-                }}
+            <div className="flex items-center gap-2">
+              {/* Zoom controls */}
+              <div className="flex items-center gap-1 border rounded-lg p-1 bg-white/50 dark:bg-gray-800/50 dark:border-gray-700">
+                <Button 
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))}
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <div className="w-12 text-center text-xs">
+                  {Math.round(zoomLevel * 100)}%
+                </div>
+                <Button 
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => setZoomLevel(prev => Math.min(2, prev + 0.1))}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+              
+              {/* Type filter */}
+              <Select
+                value={typeFilter || 'all'}
+                onValueChange={(value) => setTypeFilter(value === 'all' ? null : value)}
               >
-                <option value="">All Types</option>
-                {availableTenderTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {availableTenderTypes.map(type => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {/* Show highlighted only */}
+              <Button
+                variant={showHighlightedOnly ? "default" : "outline"}
+                size="sm"
+                className="h-8"
+                onClick={() => setShowHighlightedOnly(!showHighlightedOnly)}
+              >
+                {showHighlightedOnly ? "Highlighted Only" : "Show Highlighted"}
+              </Button>
             </div>
-
-            {/* Highlighted only toggle */}
-            <Button
-              variant={showHighlightedOnly ? "default" : "outline"}
-              size="sm"
-              className={cn(
-                "h-10 px-3 transition-colors",
-                showHighlightedOnly 
-                  ? "bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500 dark:bg-yellow-600 dark:hover:bg-yellow-700" 
-                  : "text-yellow-600 border-yellow-200 hover:bg-yellow-50 dark:text-yellow-400 dark:border-yellow-900/50 dark:hover:bg-yellow-900/20"
-              )}
-              onClick={() => setShowHighlightedOnly(!showHighlightedOnly)}
-            >
-              {showHighlightedOnly ? "Highlighted Only" : "Show Highlighted"}
-            </Button>
           </div>
         </div>
       </div>
-
-      {/* Show message when there are no tenders to display after filtering */}
-      {Object.keys(filteredData).length === 0 ? (
-        <div className="border rounded-2xl overflow-hidden p-10 text-center bg-card dark:bg-gray-600/50">
-          <div className="text-lg font-medium">No tender found</div>
-          <p className="text-muted-foreground mt-1">
-            {typeFilter 
-              ? `No tender match the filter "${typeFilter}". Try selecting a different type.` 
-              : selectedDate
-                ? "No tender found for the selected date. Try a different date."
-                : "No tender available to display. Please check your data source."}
-          </p>
-          {(typeFilter || selectedDate) && (
-            <Button 
-              variant="outline" 
-              className="mt-4" 
-              onClick={() => {
-                setTypeFilter(null);
-                setSelectedDate(undefined);
-                console.log("Clearing all filters");
-              }}
-            >
-              Clear all filters
-            </Button>
-          )}
-        </div>
-      ) : (
-        <Card className={cn(
-          "border rounded-2xl overflow-hidden mt-10",
-          "bg-white dark:bg-gray-900/80",
-          "shadow-md hover:shadow-lg",
-          "transition-all duration-200",
-          typeFilter && "border-l-4 border-l-primary",
-          showHighlightedOnly && "border-l-4 border-l-yellow-400",
-        )}>
-          {/* Main timeline container with horizontal scrolling */}
-          <div className="flex flex-col">
-            {/* Month headers - Sticky at top */}
-            <div className="sticky z-40 bg-background/95 backdrop-blur-sm border-b-2 dark:border-gray-800 dark:bg-gray-900/50">
-              <div className="flex">
-                {/* Fixed keyword column header */}
-                <div className="w-[200px] shrink-0 font-medium sticky left-0 z-50 border-r-2 bg-background/95 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/50">
-                  <div className="flex items-center justify-center h-[60px]">
-                    Keywords
-                  </div>
-                </div>
-                
-                {/* Scrollable month headers */}
-                <div 
-                  ref={monthHeadersRef}
-                  className="overflow-x-auto scrollbar-hide"
-                  style={{ 
-                    maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
-                    scrollbarWidth: "none" // Firefox
-                  }}
-                >
-                  <div 
-                    className="flex"
-                    style={{ 
-                      width: `${Math.max(1200, months.length * (viewMode === 'years' ? 200 : 100)) * zoomLevel}px`,
-                      minWidth: "100%",
-                      transition: 'width 0.5s ease'
-                    }}
-                  >
-                    {months.map((date, i) => (
-                      <div 
-                        key={i} 
-                        className="font-medium p-4"
-                        style={{ 
-                          width: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
-                          minWidth: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
-                        }}
-                      >
-                        {viewMode === 'years' ? (
-                          // Year view
-                          <div className="text-center text-base font-semibold">
-                            {format(date, 'yyyy')}
-                          </div>
-                        ) : zoomLevel < 0.75 ? (
-                          // Compact month view
-                          <div className="text-center">
-                            <div className="text-sm">{format(date, 'MMM')}</div>
-                            {i === 0 || date.getMonth() === 0 ? (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {format(date, 'yyyy')}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          // Regular month view
-                          <div className="text-sm">
-                            {format(date, 'MMM yyyy')}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+      
+      {/* Scrollable content area */}
+      <div className="flex-grow overflow-auto">
+        <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-8">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-60">
+              <div className="flex flex-col items-center gap-2">
+                <Skeleton className="w-12 h-12 rounded-full" />
+                <div>
+                  <Skeleton className="w-32 h-6" />
                 </div>
               </div>
             </div>
-
-            {/* Timeline content - Scrolls with headers */}
-            <div 
-              className="relative max-h-[calc(100vh-250px)] overflow-y-auto bg-background/50 backdrop-blur-xl"
-              onScroll={(e) => {
-                // When vertical scrolling happens, we need to keep the horizontal scroll position in sync
-                if (monthHeadersRef.current && timelineContentRef.current) {
-                  monthHeadersRef.current.scrollLeft = timelineContentRef.current.scrollLeft;
-                }
-              }}
-            >
-              <div className="flex">
-                {/* Fixed keyword column */}
-                <div className="w-[200px] shrink-0 sticky left-0 z-40 bg-background/90 backdrop-blur-sm border-r-2 dark:border-gray-800 dark:bg-gray-900/50">
-                  {Object.entries(filteredData).map(([keyword, data], index) => {
-                    // Calculate the total height based on the number of rows
-                    const rowCount = Math.max(1, data.rows.length);
-                    
-                    return (
-                      <div 
-                        key={keyword}
-                        className="border-b border-border dark:border-gray-800"
-                        ref={(el) => { sectionRefs.current[keyword] = el; }}
+          ) : (
+            <>
+              {/* Timeline visualization */}
+              <Card className="shadow-md dark:shadow-primary/5 overflow-hidden">
+                {Object.keys(filteredData).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="rounded-full bg-muted p-6 mb-4">
+                      <LineChart className="h-10 w-10 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2">No tenders to display</h3>
+                    <p className="text-muted-foreground max-w-md mb-6">
+                      {typeFilter 
+                        ? `No tenders match the filter "${typeFilter}". Try selecting a different type.` 
+                        : showHighlightedOnly
+                          ? "No highlighted tenders found. Try disabling the highlight filter."
+                          : "Your timeline is empty. Add keywords and search for tenders in the dashboard to populate your timeline."}
+                    </p>
+                    {(typeFilter || showHighlightedOnly) && (
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setTypeFilter(null);
+                          setShowHighlightedOnly(false);
+                        }}
                       >
-                        {data.rows.length === 0 ? (
-                          // Empty row to match the timeline row
-                          <div className="h-[60px] flex items-center px-4 group">
-                            <div className="w-full space-y-1">
-                              <div className="font-medium text-end relative group">
-                                <span className="inline-block max-w-[180px] truncate">{keyword}</span>
-                                {keyword.length > 18 && (
-                                  <div className="absolute right-0 top-[-5px] scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right dark:bg-gray-800/95 dark:shadow-lg dark:border dark:border-gray-700">
-                                    {keyword}
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  /* Main timeline container with horizontal scrolling */
+                  <div className="flex flex-col">
+                    {/* Month headers - Sticky at top */}
+                    <div className="sticky z-40 bg-background/95 backdrop-blur-sm border-b-2 dark:border-gray-800 dark:bg-gray-900/50">
+                      <div className="flex">
+                        {/* Fixed keyword column header */}
+                        <div className="w-[200px] shrink-0 font-medium sticky left-0 z-50 border-r-2 bg-background/95 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/50">
+                          <div className="flex items-center justify-center h-[60px]">
+                            Keywords
+                          </div>
+                        </div>
+                        
+                        {/* Scrollable month headers */}
+                        <div 
+                          ref={monthHeadersRef}
+                          className="overflow-x-auto scrollbar-hide"
+                          style={{ 
+                            maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
+                            scrollbarWidth: "none" // Firefox
+                          }}
+                        >
+                          <div 
+                            className="flex"
+                            style={{ 
+                              width: `${Math.max(1200, months.length * (viewMode === 'years' ? 200 : 100)) * zoomLevel}px`,
+                              minWidth: "100%",
+                              transition: 'width 0.5s ease'
+                            }}
+                          >
+                            {months.map((date, i) => (
+                              <div 
+                                key={i} 
+                                className="font-medium p-4"
+                                style={{ 
+                                  width: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
+                                  minWidth: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
+                                }}
+                              >
+                                {viewMode === 'years' ? (
+                                  // Year view
+                                  <div className="text-center text-base font-semibold">
+                                    {format(date, 'yyyy')}
+                                  </div>
+                                ) : zoomLevel < 0.75 ? (
+                                  // Compact month view
+                                  <div className="text-center">
+                                    <div className="text-sm">{format(date, 'MMM')}</div>
+                                    {i === 0 || date.getMonth() === 0 ? (
+                                      <div className="text-xs text-muted-foreground mt-1">
+                                        {format(date, 'yyyy')}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  // Regular month view
+                                  <div className="text-sm">
+                                    {format(date, 'MMM yyyy')}
                                   </div>
                                 )}
                               </div>
-                              <div className="text-xs text-muted-foreground text-end">
-                                {data.tenders.length} tenders
-                              </div>
-                            </div>
+                            ))}
                           </div>
-                        ) : (
-                          // Create matching rows for each timeline row
-                          data.rows.map((_, rowIndex) => (
-                            <div key={`${keyword}-row-${rowIndex}`} className="h-[60px] flex items-center px-4 group">
-                              {rowIndex === 0 && (
-                                <div className="w-full space-y-1">
-                                  <div className="font-medium text-end relative group">
-                                    <span className="inline-block max-w-[180px] truncate">{keyword}</span>
-                                    {keyword.length > 18 && (
-                                      <div className="absolute right-0 top-[-5px] scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right dark:bg-gray-800/95 dark:shadow-lg dark:border dark:border-gray-700">
-                                        {keyword}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground text-end">
-                                    {data.tenders.length} tenders
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))
-                        )}
+                        </div>
                       </div>
-                    );
-                  })}
+                    </div>
+
+                    {/* Timeline content - Scrolls with headers */}
+                    <div 
+                      className="relative max-h-[calc(100vh-250px)] overflow-y-auto bg-background/50 backdrop-blur-xl"
+                      onScroll={(e) => {
+                        // When vertical scrolling happens, we need to keep the horizontal scroll position in sync
+                        if (monthHeadersRef.current && timelineContentRef.current) {
+                          monthHeadersRef.current.scrollLeft = timelineContentRef.current.scrollLeft;
+                        }
+                      }}
+                    >
+                      <div className="flex">
+                        {/* Fixed keyword column */}
+                        <div className="w-[200px] shrink-0 sticky left-0 z-40 bg-background/90 backdrop-blur-sm border-r-2 dark:border-gray-800 dark:bg-gray-900/50">
+                          {Object.entries(filteredData).map(([keyword, data], index) => {
+                            return (
+                              <div 
+                                key={keyword}
+                                className="border-b border-border dark:border-gray-800"
+                                ref={(el) => { sectionRefs.current[keyword] = el; }}
+                              >
+                                {data.rows.length === 0 ? (
+                                  // Empty row to match the timeline row
+                                  <div className="h-[60px] flex items-center px-4 group">
+                                    <div className="w-full space-y-1">
+                                      <div className="font-medium text-end relative group">
+                                        <span className="inline-block max-w-[180px] truncate">{keyword}</span>
+                                        {keyword.length > 18 && (
+                                          <div className="absolute right-0 top-[-5px] scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right dark:bg-gray-800/95 dark:shadow-lg dark:border dark:border-gray-700">
+                                              {keyword}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground text-end">
+                                        {data.tenders.length} tenders
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  // Create matching rows for each timeline row
+                                  data.rows.map((_, rowIndex) => (
+                                    <div key={`${keyword}-row-${rowIndex}`} className="h-[60px] flex items-center px-4 group">
+                                      {rowIndex === 0 && (
+                                        <div className="w-full space-y-1">
+                                          <div className="font-medium text-end relative group">
+                                            <span className="inline-block max-w-[180px] truncate">{keyword}</span>
+                                            {keyword.length > 18 && (
+                                              <div className="absolute right-0 top-[-5px] scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right dark:bg-gray-800/95 dark:shadow-lg dark:border dark:border-gray-700">
+                                                {keyword}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground text-end">
+                                            {data.tenders.length} tenders
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
+                        {/* Scrollable timeline content */}
+                        <div 
+                          ref={timelineContentRef}
+                          className="overflow-x-auto scrollbar-hide"
+                          style={{ 
+                            maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
+                            scrollbarWidth: "none" // Firefox
+                          }}
+                        >
+                          <div 
+                            ref={timelineContainerRef}
+                            style={{ 
+                              width: `${Math.max(1200, months.length * (viewMode === 'years' ? 200 : 100)) * zoomLevel}px`,
+                              minWidth: "100%",
+                              transition: 'width 0.5s ease'
+                            }}
+                          >
+                            {/* Timeline rows */}
+                            {Object.entries(filteredData).map(([keyword, data], keywordIndex) => (
+                              <div 
+                                key={keyword}
+                                className="border-b border-border"
+                              >
+                                {data.rows.length === 0 ? (
+                                  // Empty placeholder row to maintain alignment
+                                  <div className="h-[60px]"></div>
+                                ) : (
+                                  // Render rows for this keyword
+                                  data.rows.map((row, rowIndex) => (
+                                    <div 
+                                      key={`${keyword}-row-${rowIndex}`}
+                                      className="relative h-[60px] flex items-center hover:bg-accent/50 transition-colors"
+                                    >
+                                      {/* Tender bars container */}
+                                      <div className="relative w-full h-10">
+                                        {row.tenders.map(group => (
+                                          <React.Fragment key={group.tender.id}>
+                                            {group.versions.map((version, versionIndex) => {
+                                              const dates = getTenderDates(version);
+                                              const startDate = parseTenderDate(dates.startDate);
+                                              const endDate = dates.endDate ? parseTenderDate(dates.endDate) : new Date(startDate.getTime() + (30 * 24 * 60 * 60 * 1000));
+                                              
+                                              // Calculate position based on months
+                                              const timelineStartTime = timelineRange.start.getTime();
+                                              const timelineEndTime = timelineRange.end.getTime();
+                                              const totalTimelineMs = timelineEndTime - timelineStartTime;
+                                              
+                                              // Calculate position in pixels
+                                              const startTimeOffset = startDate.getTime() - timelineStartTime;
+                                              const endTimeOffset = endDate.getTime() - timelineStartTime;
+                                              
+                                              // Calculate total width based on view mode
+                                              const unitWidthPx = (viewMode === 'years' ? 200 : 100) * zoomLevel;
+                                              const totalWidthPx = months.length * unitWidthPx;
+                                              
+                                              // Calculate position as percentage of total timeline width
+                                              const startPct = startTimeOffset / totalTimelineMs;
+                                              const endPct = endTimeOffset / totalTimelineMs;
+                                              
+                                              // Convert percentage to pixels
+                                              const startPx = startPct * totalWidthPx;
+                                              const endPx = endPct * totalWidthPx;
+                                              const widthPx = Math.max(30, endPx - startPx); // Ensure minimum width
+                                              
+                                              // Calculate opacity based on version index
+                                              const opacity = 1 - (versionIndex * 0.15);
+
+                                              // Check if this tender is highlighted
+                                              const isHighlighted = group.tender.isHighlighted;
+                                              
+                                              // Determine if we should show the title based on width
+                                              // Only show title if bar is wide enough (at least 70px)
+                                              const showTitle = widthPx >= 70;
+
+                                              return (
+                                                <HoverCard key={`${group.tender.id}-${version.date}`} openDelay={0.1} closeDelay={0.1}>
+                                                  <HoverCardTrigger asChild>
+                                                    <button
+                                                      onClick={() => setSelectedTender(group)}
+                                                      className={cn(
+                                                        "absolute rounded-full transition-all group border-2",
+                                                        isHighlighted 
+                                                          ? "border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]" // Highlight the tender bar
+                                                          : "border-white",
+                                                        group.tender.isArchived && "opacity-75 line-through",
+                                                        "flex items-center justify-center text-sm",
+                                                        TYPE_COLORS[version.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default
+                                                      )}
+                                                      style={{
+                                                        left: `${Math.max(0, startPx)}px`,
+                                                        width: `${widthPx}px`,
+                                                        height: '26px',
+                                                        fontSize: `${Math.min(16, Math.max(8, 12 / zoomLevel)) * zoomLevel}px`,
+                                                        top: '50%',
+                                                        transform: 'translateY(-50%)',
+                                                        transition: 'all 0.2s ease-in-out',
+                                                        opacity: isHighlighted ? 1 : opacity, // Full opacity for highlighted tenders
+                                                        zIndex: isHighlighted ? 50 : (10 + (group.versions.length - versionIndex)), // Higher z-index for highlighted tenders
+                                                        textDecoration: group.tender.isArchived ? 'line-through' : 'none',
+                                                      }}
+                                                    >
+                                                      {/* Only show text if bar is wide enough */}
+                                                      {showTitle && (
+                                                        <span className={cn(
+                                                          "truncate text-center p-1",
+                                                          group.tender.isArchived && "line-through opacity-70"
+                                                        )}>
+                                                          {group.tender.title}
+                                                        </span>
+                                                      )}
+                                                    </button>
+                                                  </HoverCardTrigger>
+                                                  <HoverCardContent 
+                                                    className={cn(
+                                                      "w-auto max-w-[400px] p-3",
+                                                      "bg-white/95 backdrop-blur-sm dark:bg-gray-800/95",
+                                                      "border border-border/50 shadow-lg dark:border-gray-700",
+                                                      "rounded-lg",
+                                                      "animate-in fade-in-0 zoom-in-95",
+                                                      "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+                                                    )}
+                                                    style={{ zIndex: 100 }}
+                                                    side="bottom" 
+                                                    align="center"
+                                                    sideOffset={5}
+                                                    avoidCollisions={true}
+                                                  >
+                                                    <div className="flex flex-col gap-2">
+                                                      <div className="flex items-center justify-between">
+                                                        <Badge 
+                                                          className={cn(
+                                                            TYPE_COLORS[version.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default,
+                                                            "border-none hover:bg-transparent"
+                                                          )}
+                                                        >
+                                                          {version.type}
+                                                        </Badge>
+                                                        <span className="text-xs text-muted-foreground">
+                                                          {format(parseTenderDate(dates.startDate), 'PPP')}
+                                                        </span>
+                                                      </div>
+                                                      <p className={cn(
+                                                        "text-sm font-medium leading-snug",
+                                                        group.tender.isArchived && "line-through opacity-70"
+                                                      )}>
+                                                        {group.tender.title}
+                                                      </p>
+                                                      {version.data?.detail?.['預算金額'] && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                          Budget: {version.data.detail['預算金額']}
+                                                        </p>
+                                                      )}
+                                                      {version.data?.detail?.['招標資料:招標狀態'] && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                          Status: {version.data.detail['招標資料:招標狀態']}
+                                                        </p>
+                                                      )}
+                                                    </div>
+                                                  </HoverCardContent>
+                                                </HoverCard>
+                                              );
+                                            })}
+                                          </React.Fragment>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+              
+              {/* Deprecated tenders section */}
+                {/* Show deprecated toggle as a text button */}
+                <div className="flex items-center justify-center w-full">
+                  <Button
+                    variant="link"
+                    className={cn(
+                      "text-sm flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-all",
+                      showDeprecatedTenders && "text-foreground"
+                    )}
+                    onClick={() => setShowDeprecatedTenders(!showDeprecatedTenders)}
+                  >
+                    {showDeprecatedTenders ? (
+                      <>
+                        <ChevronUp className="h-3.5 w-3.5" />
+                        Hide deprecated keywords tenders
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-3.5 w-3.5" />
+                        Show deprecated keywords tenders ( {deprecatedTendersCount} )
+                      </>
+                    )}
+                  </Button>
                 </div>
                 
-                {/* Scrollable timeline content */}
-                <div 
-                  ref={timelineContentRef}
-                  className="overflow-x-auto scrollbar-hide"
-                  style={{ 
-                    maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
-                    scrollbarWidth: "none" // Firefox
-                  }}
-                >
-                  <div 
-                    ref={timelineContainerRef}
-                    style={{ 
-                      width: `${Math.max(1200, months.length * (viewMode === 'years' ? 200 : 100)) * zoomLevel}px`,
-                      minWidth: "100%",
-                      transition: 'width 0.5s ease'
-                    }}
-                  >
-                    {/* Timeline rows */}
-                    {Object.entries(filteredData).map(([keyword, data], keywordIndex) => (
-                      <div 
-                        key={keyword}
-                        className="border-b border-border"
-                      >
-                        {data.rows.length === 0 ? (
-                          // Empty placeholder row to maintain alignment
-                          <div className="h-[60px]"></div>
-                        ) : (
-                          // Render rows for this keyword
-                          data.rows.map((row, rowIndex) => (
+                {/* Deprecated tenders display */}
+                {showDeprecatedTenders && (
+                  <div className="mt-6">
+                    <div className="bg-muted/30 p-4 rounded-lg border border-border">
+                      <h3 className="text-base font-medium mb-4">Deprecated Tenders</h3>
+                      
+                      {/* Potential deprecated keywords */}
+                      {deprecatedKeywords.length > 0 && (
+                        <div className="mb-4">
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            <span className="text-xs font-medium text-muted-foreground">Potential Keywords:</span>
+                            {deprecatedKeywords.slice(0, 10).map((keyword, idx) => (
+                              <Badge key={idx} variant="outline" className="bg-background/80 text-xs py-0 h-5">
+                                {keyword}
+                              </Badge>
+                            ))}
+                            {deprecatedKeywords.length > 10 && (
+                              <Badge variant="outline" className="bg-background/80 text-xs py-0 h-5">
+                                +{deprecatedKeywords.length - 10} more
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Deprecated tenders list */}
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {formattedDeprecatedTenders.length > 0 ? (
+                          formattedDeprecatedTenders.map((group) => (
                             <div 
-                              key={`${keyword}-row-${rowIndex}`}
-                              className="relative h-[60px] flex items-center hover:bg-accent/50 transition-colors"
+                              key={group.tender.id}
+                              className="p-2.5 bg-background/80 rounded-md border border-border hover:border-primary/30 transition-colors cursor-pointer"
+                              onClick={() => setSelectedTender(group)}
                             >
-                              {/* Tender bars container */}
-                              <div className="relative w-full h-10">
-                                {row.tenders.map(group => (
-                                  <React.Fragment key={group.tender.id}>
-                                    {group.versions.map((version, versionIndex) => {
-                                      const dates = getTenderDates(version);
-                                      const startDate = parseTenderDate(dates.startDate);
-                                      const endDate = dates.endDate ? parseTenderDate(dates.endDate) : new Date(startDate.getTime() + (30 * 24 * 60 * 60 * 1000));
-                                      
-                                      // Calculate position based on months
-                                      const timelineStartTime = timelineRange.start.getTime();
-                                      const timelineEndTime = timelineRange.end.getTime();
-                                      const totalTimelineMs = timelineEndTime - timelineStartTime;
-                                      
-                                      // Calculate position in pixels
-                                      const startTimeOffset = startDate.getTime() - timelineStartTime;
-                                      const endTimeOffset = endDate.getTime() - timelineStartTime;
-                                      
-                                      // Calculate total width based on view mode
-                                      const unitWidthPx = (viewMode === 'years' ? 200 : 100) * zoomLevel;
-                                      const totalWidthPx = months.length * unitWidthPx;
-                                      
-                                      // Calculate position as percentage of total timeline width
-                                      const startPct = startTimeOffset / totalTimelineMs;
-                                      const endPct = endTimeOffset / totalTimelineMs;
-                                      
-                                      // Convert percentage to pixels
-                                      const startPx = startPct * totalWidthPx;
-                                      const endPx = endPct * totalWidthPx;
-                                      const widthPx = Math.max(30, endPx - startPx); // Ensure minimum width
-                                      
-                                      // Calculate opacity based on version index
-                                      const opacity = 1 - (versionIndex * 0.15);
-                                      
-                                      // Log position calculations for debugging
-                                      if (group.tender.title === "102年推動建築物設置太陽光電設施計畫委託技術服務案") {
-                                        console.log(`Target tender position: start: ${startPx.toFixed(2)}px, width: ${widthPx.toFixed(2)}px, startPct: ${(startPct * 100).toFixed(2)}%, endPct: ${(endPct * 100).toFixed(2)}%`);
-                                      }
-
-                                      // Check if this tender is highlighted
-                                      const isHighlighted = group.tender.isHighlighted;
-                                      
-                                      // Determine if we should show the title based on width
-                                      // Only show title if bar is wide enough (at least 120px)
-                                      const showTitle = widthPx >= 120;
-
-                                      return (
-                                        <HoverCard key={`${group.tender.id}-${version.date}`} openDelay={0.1} closeDelay={0.1}>
-                                          <HoverCardTrigger asChild>
-                                            <button
-                                              onClick={() => setSelectedTender(group)}
-                                              className={cn(
-                                                "absolute rounded-full transition-all group border-2",
-                                                isHighlighted 
-                                                  ? "border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]" // Highlight the tender bar
-                                                  : "border-white",
-                                                group.tender.isArchived && "opacity-75 line-through",
-                                                "flex items-center justify-center text-sm",
-                                                TYPE_COLORS[version.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default
-                                              )}
-                                              style={{
-                                                left: `${Math.max(0, startPx)}px`,
-                                                width: `${widthPx}px`,
-                                                height: '26px',
-                                                fontSize: `${Math.min(16, Math.max(8, 12 / zoomLevel)) * zoomLevel}px`,
-                                                top: '50%',
-                                                transform: 'translateY(-50%)',
-                                                transition: 'all 0.2s ease-in-out',
-                                                opacity: isHighlighted ? 1 : opacity, // Full opacity for highlighted tenders
-                                                zIndex: isHighlighted ? 50 : (10 + (group.versions.length - versionIndex)), // Higher z-index for highlighted tenders
-                                                textDecoration: group.tender.isArchived ? 'line-through' : 'none',
-                                              }}
-                                            >
-                                              {/* Only show text if bar is wide enough */}
-                                              {showTitle && (
-                                                <span className={cn(
-                                                  "truncate text-center p-1",
-                                                  group.tender.isArchived && "line-through opacity-70"
-                                                )}>
-                                                  {group.tender.title}
-                                                </span>
-                                              )}
-                                            </button>
-                                          </HoverCardTrigger>
-                                          <HoverCardContent 
-                                            className={cn(
-                                              "w-auto max-w-[400px] p-3",
-                                              "bg-white/95 backdrop-blur-sm dark:bg-gray-800/95",
-                                              "border border-border/50 shadow-lg dark:border-gray-700",
-                                              "rounded-lg",
-                                              "animate-in fade-in-0 zoom-in-95",
-                                              "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
-                                            )}
-                                            style={{ zIndex: 100 }}
-                                            side="bottom" 
-                                            align="center"
-                                            sideOffset={5}
-                                            avoidCollisions={true}
-                                          >
-                                            <div className="flex flex-col gap-2">
-                                              <div className="flex items-center justify-between">
-                                                <Badge 
-                                                  className={cn(
-                                                    TYPE_COLORS[version.type as keyof typeof TYPE_COLORS] || TYPE_COLORS.default,
-                                                    "border-none hover:bg-transparent"
-                                                  )}
-                                                >
-                                                  {version.type}
-                                                </Badge>
-                                                <span className="text-xs text-muted-foreground">
-                                                  {format(parseTenderDate(dates.startDate), 'PPP')}
-                                                </span>
-                                              </div>
-                                              <p className={cn(
-                                                "text-sm font-medium leading-snug",
-                                                group.tender.isArchived && "line-through opacity-70"
-                                              )}>
-                                                {group.tender.title}
-                                              </p>
-                                              {version.data?.detail?.['預算金額'] && (
-                                                <p className="text-xs text-muted-foreground">
-                                                  Budget: {version.data.detail['預算金額']}
-                                                </p>
-                                              )}
-                                              {version.data?.detail?.['招標資料:招標狀態'] && (
-                                                <p className="text-xs text-muted-foreground">
-                                                  Status: {version.data.detail['招標資料:招標狀態']}
-                                                </p>
-                                              )}
-                                            </div>
-                                          </HoverCardContent>
-                                        </HoverCard>
-                                      );
-                                    })}
-                                  </React.Fragment>
-                                ))}
+                              <div className="flex flex-col">
+                                <h4 className="font-medium text-sm line-clamp-1">{group.tender.title}</h4>
+                                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <Badge variant="secondary" className="text-[10px] h-4 px-1">
+                                    {group.tender.type || 'Unknown'}
+                                  </Badge>
+                                  {group.tender.startDate && (
+                                    <span>{format(parseTenderDate(group.tender.startDate), 'MMM d, yyyy')}</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           ))
+                        ) : (
+                          <div className="text-center py-4 text-muted-foreground col-span-2">
+                            No deprecated tenders found
+                          </div>
                         )}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Right-side sheet for tender details 
-       * @note Using Sheet instead of Dialog for better right-side panel behavior
-       * @note Sheet has built-in right-side positioning and proper animations
-       */}
-      <Sheet 
-        open={!!selectedTender} 
-        onOpenChange={(open) => {
-          console.log("Sheet state change:", { 
-            open, 
-            tenderId: selectedTender?.tender.id,
-            action: open ? "opening" : "closing" 
-          });
-          if (!open) setSelectedTender(null);
-        }}
-      >
-        <SheetContent 
-          side="right"
-          className={cn(
-            "w-full mt-4 mr-4 mb-4 rounded-lg border",
-            "p-0 bg-background shadow-lg dark:border-gray-800",
-            "focus:outline-none",
-            "h-[calc(100vh-32px)]"
+                )}
+            </>
           )}
-        >
-          {selectedTender && (
+        </div>
+      </div>
+      
+      {/* Sheet for tender details (keep this outside the scrollable area) */}
+      {selectedTender && (
+        <Sheet open={!!selectedTender} onOpenChange={(open) => !open && setSelectedTender(null)}>
+          <SheetContent className="sm:max-w-xl w-[600px] p-0">
             <div className="h-full flex flex-col rounded-lg overflow-hidden">
               <SheetHeader className="px-6 py-4 shrink-0 max-w-[460px]">
                 <SheetTitle className={cn(
@@ -1231,7 +1505,7 @@ export default function StatisticsPage() {
                         <CardContent>
                           <div className="flex items-center">
                             <div className="h-2 w-2 rounded-full bg-blue-500 mr-2" />
-                            <span>{selectedTender.tender.brief['招標資料:招標狀態'] || 'N/A'}</span>
+                            <span>{selectedTender.tender.brief?.['招標資料:招標狀態'] || 'N/A'}</span>
                           </div>
                         </CardContent>
                       </Card>
@@ -1304,7 +1578,7 @@ export default function StatisticsPage() {
                                   <div key={key} className="space-y-1.5">
                                     <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
                                     <dd className="text-sm break-words">
-                                      {selectedTender.tender.brief[key] || 'N/A'}
+                                      {selectedTender.tender.brief?.[key] || 'N/A'}
                                     </dd>
                                   </div>
                                 ))}
@@ -1328,7 +1602,7 @@ export default function StatisticsPage() {
                                   <div key={key} className="space-y-1.5">
                                     <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
                                     <dd className="text-sm break-words">
-                                      {selectedTender.tender.brief[key] || 'N/A'}
+                                      {selectedTender.tender.brief?.[key] || 'N/A'}
                                     </dd>
                                   </div>
                                 ))}
@@ -1343,7 +1617,7 @@ export default function StatisticsPage() {
                             </CardHeader>
                             <CardContent>
                               <div className="space-y-4">
-                                {Object.entries(selectedTender.tender.brief)
+                                {selectedTender.tender.brief && Object.entries(selectedTender.tender.brief)
                                   .filter(([key]) => !key.includes('機關資料:') && 
                                                    !key.includes('招標資料:') && 
                                                    !key.includes('領投開標:') &&
@@ -1405,9 +1679,9 @@ export default function StatisticsPage() {
                 </div>
               </Tabs>
             </div>
-          )}
-        </SheetContent>
-      </Sheet>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }

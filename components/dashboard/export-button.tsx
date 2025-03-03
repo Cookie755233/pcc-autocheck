@@ -204,10 +204,10 @@ export function ExportButton({ tenders }: ExportButtonProps) {
                   const vUrl = v.enrichedData?.url || v.data?.detail?.url;
                   return vUrl && vUrl !== primaryUrl;
                 }).length;
-                
+
                 // If there are other versions with different URLs, mention them
                 if (otherVersionsWithUrls > 0) {
-                  content += `\n(另有 ${otherVersionsWithUrls} 個版本連結)`;
+                  content += `\n(另有 ${otherVersionsWithUrls - 1} 個版本)`;
                 }
               }
             }
@@ -722,7 +722,8 @@ export function ExportButton({ tenders }: ExportButtonProps) {
   const formatDescriptions = {
     json: "Exports all tender data in JSON format, including all metadata and related information. Useful for data analysis or importing into other systems.",
     text: "Exports tenders in a readable text format organized by date and tag. Includes titles, publication dates, deadlines, and URLs. Ideal for sharing or printing.",
-    pdf: "Exports tenders as a formatted PDF document with proper layout and styling. Each tender and its versions will be exported as separate pages in the PDF."
+    pdf: "Exports tenders as a formatted PDF document with proper layout and styling. Each tender and its versions will be exported as separate pages in the PDF.",
+    pdfWarning: "Caveats: PDF export will only work in light mode. Dark mode is not supported."
   };
 
   // Get the appropriate icon for the current format
@@ -791,6 +792,10 @@ export function ExportButton({ tenders }: ExportButtonProps) {
               <TabsContent value="pdf" className="ml-2 mt-6">
                 <div className="text-sm text-muted-foreground">
                   {formatDescriptions.pdf}
+                </div>
+                <br/>
+                <div className="text-sm text-red-600">
+                  {formatDescriptions.pdfWarning}
                 </div>
               </TabsContent>
             </Tabs>
