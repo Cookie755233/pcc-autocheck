@@ -17,6 +17,7 @@
 .DS_Store
 *.pem
 .env
+.env.bak
 .env.local
 .env.development.local
 .env.test.local
@@ -53,3 +54,6 @@ next-env.d.ts
 # Logs
 logs
 *.log
+
+# cursor
+.cursorrules
