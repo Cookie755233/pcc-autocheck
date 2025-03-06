@@ -10,11 +10,9 @@ TenderWatch is a web application that helps users track and monitor government p
 - **Timeline Visualization**:
   - Interactive chronological view of all tenders by keyword
   - Horizontally scrollable timeline with sticky headers
-  - Color-coded tender types for easy identification
   - Zoom and filter controls for exploring tender data
-  - Detailed hover cards with tender information
+  - Modern tabbed interface for tender details with Overview, Details, and Versions views
   - Monthly/yearly view options for different time scales
-  - Support for highlighting important tenders
 - **Real-time Processing Logs**: 
   - Detailed color-coded logs showing search progress
   - Visual indicators for new, updated, and existing tenders
@@ -34,13 +32,15 @@ TenderWatch is a web application that helps users track and monitor government p
   - Archive/unarchive tenders
   - Highlight important tenders
   - View tender details and history
+  - Smart Auto-Archiving: Tenders are automatically archived when their only matching keyword is deleted (highlighted tenders are preserved)
 - **Export Capabilities**:
   - Export to JSON for data analysis
   - Export to formatted text for sharing
   - Export to PDF with customizable quality settings
   - Progress tracking for large exports
-- **User Authentication**: Secure login with Google accounts via Clerk
+- **User Authentication**: Secure login with Google/Line accounts via Clerk
 - **Full Dark Mode Support**: Complete dark mode styling across all components
+- **Subscription Based Functions**: Distinguish pro user and free user by subscription tier
 
 ## Tech Stack
 
@@ -84,7 +84,7 @@ TenderWatch is a web application that helps users track and monitor government p
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
    CLERK_SECRET_KEY=your_clerk_secret_key
    
-   # Database
+   # Database (preferably Prisma)
    DATABASE_URL="postgresql://username:password@localhost:5432/tenderwatch"
    
    # API
@@ -109,29 +109,30 @@ TenderWatch is a web application that helps users track and monitor government p
 
 ```
 tenderwatch/
-├── app/                  # Next.js App Router
-│   ├── api/              # API routes
-│   │   └── tenders/      # Tender-related API endpoints
-│   ├── dashboard/        # Dashboard page
-│   │   └── statistics/   # Timeline visualization
-│   └── ...
-├── components/           # React components
-│   ├── dashboard/        # Dashboard-specific components
-│   │   ├── tender-board.tsx    # Main tender display board
-│   │   ├── tender-card.tsx     # Individual tender card
-│   │   ├── tender-filters.tsx  # Filtering interface
-│   │   └── export-button.tsx   # Export functionality
-│   ├── ui/               # Shadcn UI components
-│   └── ...
-├── contexts/             # Context providers
-│   └── notification-context.tsx # Notification management
-├── lib/                  # Utility functions and shared code
-│   ├── date-utils.ts     # Date formatting utilities
-│   └── events/           # Event handling
-├── prisma/               # Prisma schema and migrations
-├── public/               # Static assets
-└── types/                # TypeScript type definitions
-    └── tender.ts         # Tender-related type definitions
+├── app/ # Next.js App Router
+│ ├── api/ # API routes
+│ │ └── tenders/ # Tender-related API endpoints
+│ ├── dashboard/ # Dashboard page
+│ │ └── statistics/ # Timeline visualization
+│ └── ...
+├── components/ # React components
+│ ├── dashboard/ # Dashboard-specific components
+│ │ ├── tender-board.tsx # Main tender display board
+│ │ ├── tender-card.tsx # Individual tender card
+│ │ ├── tender-filters.tsx # Filtering interface
+│ │ └── export-button.tsx # Export functionality
+│ ├── ui/ # Shadcn UI components
+│ └── ...
+├── contexts/ # Context providers
+│ └── notification-context.tsx # Notification management
+├── lib/ # Utility functions and shared code
+│ ├── date-utils.ts # Date formatting utilities
+│ └── events/ # Event handling
+├── prisma/ # Prisma schema and migrations
+├── public/ # Static assets
+└── types/ # TypeScript type definitions
+└── tender.ts # Tender-related type definitions
+
 ```
 
 ## User Interface Features
@@ -141,8 +142,9 @@ tenderwatch/
 - **Interactive controls**: Zoom in/out, switch between monthly and yearly views
 - **Filtering capabilities**: Focus on specific tender types or highlight important tenders
 - **Responsive design**: Works on different screen sizes with horizontal scrolling
-- **Detailed hover cards**: Quick access to tender information without opening full details
-- **Date parsing**: Supports various date formats including ROC dates (民國)
+- **Tabbed tender details**: Modern tab interface with Overview, Details, and Versions views
+- **Enhanced version history**: GitHub-inspired commit timeline showing tender version history
+- **Date parsing**: Supports various date formats including ROC dates
 
 ### Enhanced Logging System
 - **Color-coded logs**: Green for new items, blue for updates, amber for warnings, red for errors
@@ -159,6 +161,11 @@ tenderwatch/
 - **Variant styling**: Different styles for success, error, warning, and info messages
 - **Dark mode support**: Proper contrast in both light and dark themes
 - **Clear messaging**: Descriptive titles and details for user feedback
+
+### Intelligent Tender Management
+- **Smart auto-archiving**: When a keyword is deleted, tenders that only match that keyword are automatically archived
+- **Preservation of important items**: Highlighted tenders are never auto-archived, ensuring important items stay visible
+- **Visual feedback**: Notifications inform users when tenders are auto-archived due to keyword deletion
 
 ### Dark Mode Support
 - **Complete theme integration**: All components styled for both light and dark modes
@@ -178,6 +185,8 @@ tenderwatch/
    - Use zoom controls to adjust the time scale
    - Filter by tender type or highlight important tenders
    - Hover over tender bars to see details or click to open full information
+   - Explore tender details through the tabbed interface
+   - View version history in the GitHub-inspired timeline view
 6. **Filter Results**: 
    - Use the filter panel to narrow down by organization or type
    - Use the search box to find tenders by title
@@ -185,7 +194,7 @@ tenderwatch/
    - Focus on or hide specific keywords
 7. **Organize Tenders**: 
    - Archive tenders you're not interested in
-   - Highlight important tenders
+   - Highlight important tenders to prevent auto-archiving and keep them visible
    - View tender details by clicking on a card
 8. **Export Data**:
    - Export filtered tenders to JSON, text, or PDF

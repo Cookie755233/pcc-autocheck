@@ -8,7 +8,7 @@ import type { Keyword } from '@prisma/client'
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
-import { Plus, X, Search, Eye, EyeOff } from "lucide-react";
+import { Plus, X, Search, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { stringToColor } from "@/lib/utils";
 import { 
   Select,
@@ -20,6 +20,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { TenderEvent } from "@/lib/events/tender-events";
 import { TenderGroup } from "@/types/tender";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface KeywordPanelProps {
   className?: string;
@@ -53,6 +54,9 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
   });
   const [processingLog, setProcessingLog] = useState<string[]>([]);
   const [isLogExpanded, setIsLogExpanded] = useState(false);
+  const [isProPlan, setIsProPlan] = useState(false);
+  const [keywordLimitReached, setKeywordLimitReached] = useState(false);
+  const FREE_TIER_KEYWORD_LIMIT = 5;
 
   const fetchKeywords = async () => {
     if (!user?.id) return;
@@ -72,6 +76,9 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       
       console.log('Setting active keyword IDs:', activeIds);
       setActiveKeywords(new Set(activeIds));
+
+      // Check if the keyword limit is reached for free tier
+      setKeywordLimitReached(!isProPlan && data.length >= FREE_TIER_KEYWORD_LIMIT);
     } catch (error) {
       console.error('Error loading keywords:', error);
     }
@@ -83,9 +90,33 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
     }
   }, [user?.id]);
 
+  useEffect(() => {
+    if (user?.id) {
+      // Fetch user's subscription status
+      const fetchSubscriptionStatus = async () => {
+        try {
+          const response = await fetch('/api/users/subscription');
+          if (!response.ok) throw new Error('Failed to fetch subscription');
+          const data = await response.json();
+          setIsProPlan(data.isProPlan || false);
+          
+          // Check if the keyword limit is reached for free tier users
+          setKeywordLimitReached(!data.isProPlan && keywords.length >= FREE_TIER_KEYWORD_LIMIT);
+        } catch (error) {
+          console.error('Error fetching subscription status:', error);
+          // Default to free tier if there's an error
+          setIsProPlan(false);
+          setKeywordLimitReached(keywords.length >= FREE_TIER_KEYWORD_LIMIT);
+        }
+      };
+      
+      fetchSubscriptionStatus();
+    }
+  }, [user?.id, keywords.length]);
+
   const handleAddKeyword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKeyword.trim()) return;
+    if (!newKeyword.trim() || keywordLimitReached) return;
 
     setIsLoading(true);
     try {
@@ -95,12 +126,30 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
         body: JSON.stringify({ text: newKeyword })
       });
 
-      if (!response.ok) throw new Error('Failed to add keyword');
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (errorData.error === 'Free tier limited to 5 keywords') {
+          setKeywordLimitReached(true);
+          toast({
+            title: "Keyword Limit Reached",
+            description: "Free tier is limited to 5 keywords. Upgrade to Pro for unlimited keywords.",
+            variant: "warning",
+            duration: 5000,
+          });
+          throw new Error(errorData.error);
+        }
+        throw new Error('Failed to add keyword');
+      }
       
       const data = await response.json();
       setKeywords(prev => [...prev, data]);
       setActiveKeywords(prev => new Set([...prev, data.id]));
       setNewKeyword('');
+      
+      // Check if we've reached the keyword limit after adding
+      if (!isProPlan && keywords.length + 1 >= FREE_TIER_KEYWORD_LIMIT) {
+        setKeywordLimitReached(true);
+      }
       
       toast({
         title: "Keyword Added",
@@ -110,12 +159,14 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       });
     } catch (error) {
       console.error('Error adding keyword:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add keyword. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      });
+      if (!(error instanceof Error && error.message === 'Free tier limited to 5 keywords')) {
+        toast({
+          title: "Error",
+          description: "Failed to add keyword. Please try again.",
+          variant: "destructive",
+          duration: 3000,
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -130,7 +181,14 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       
       if (!response.ok) throw new Error('Failed to delete keyword');
       
-      setKeywords(prev => prev.filter(k => k.id !== id));
+      setKeywords(prev => {
+        const newKeywords = prev.filter(k => k.id !== id);
+        // Update keyword limit reached status
+        if (!isProPlan && newKeywords.length < FREE_TIER_KEYWORD_LIMIT) {
+          setKeywordLimitReached(false);
+        }
+        return newKeywords;
+      });
       setActiveKeywords(prev => {
         const newSet = new Set(prev);
         newSet.delete(id);
@@ -143,6 +201,19 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
         variant: "warning",
         duration: 3000,
       });
+      
+      // Dispatch event for TenderBoard to handle archiving tenders
+      if (keywordToDelete) {
+        // Fire a custom event to notify TenderBoard
+        const event = new CustomEvent('keywordDeleted', {
+          detail: {
+            keyword: id,
+            text: keywordToDelete.text
+          }
+        });
+        window.dispatchEvent(event);
+        console.log(`Dispatched keywordDeleted event for "${keywordToDelete.text}"`);
+      }
     } catch (error) {
       console.error('Error deleting keyword:', error);
       toast({
@@ -551,13 +622,21 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
       {/* Keyword input form */}
       <form onSubmit={handleAddKeyword} className="flex gap-2 mb-4">
         <Input
-          placeholder="Add a keyword..."
+          placeholder={keywordLimitReached 
+            ? "Keyword limit reached" 
+            : "Add a keyword..."}
           value={newKeyword}
           onChange={(e) => setNewKeyword(e.target.value)}
-          className="flex-1 dark:bg-gray-800 dark:border-gray-700"
-          disabled={isLoading}
+          className={cn(
+            "flex-1 dark:bg-gray-800 dark:border-gray-700",
+            keywordLimitReached && "opacity-60"
+          )}
+          disabled={isLoading || keywordLimitReached}
         />
-        <Button type="submit" disabled={isLoading || !newKeyword.trim()}>
+        <Button 
+          type="submit" 
+          disabled={isLoading || !newKeyword.trim() || keywordLimitReached}
+        >
           {isLoading ? (
             <span className="flex items-center gap-1">
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -568,6 +647,16 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
           )}
         </Button>
       </form>
+      
+      {/* Keyword limit warning */}
+      {keywordLimitReached && (
+        <Alert variant="destructive" className="mb-4 py-2">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            Free tier is limited to {FREE_TIER_KEYWORD_LIMIT} keywords. <a href="/dashboard/settings" className="underline font-medium text-blue-500 hover:text-blue-700">Upgrade to Pro</a> for unlimited keywords.
+          </AlertDescription>
+        </Alert>
+      )}
       
       {/* Keywords list - now with flex-1 to take available space */}
       <div className="space-y-2 mb-4 overflow-y-auto flex-1">
@@ -772,8 +861,8 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
             
             {/* Stats summary */}
             {searchStats.addedToBoard > 0 && (
-              <p className="text-green-600 dark:text-green-400 mt-0.5 text-center">
-                Found {searchStats.addedToBoard} tenders matching your search conditions
+              <p className="text-green-600 dark:text-green-400 mt-0.5 text-center text-[11px]">
+                Found {searchStats.addedToBoard} tenders matching the search conditions
               </p>
             )}
           </div>

@@ -227,6 +227,7 @@ export default function StatisticsPage() {
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [showHighlightedOnly, setShowHighlightedOnly] = useState(false);
   const [showDeprecatedTenders, setShowDeprecatedTenders] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Add refs for the intersections
   const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -541,10 +542,44 @@ export default function StatisticsPage() {
     console.log("Filtering timeline data:", {
       typeFilter,
       showHighlightedOnly,
+      hasSearchQuery: !!searchQuery,
       keywordCount: Object.keys(timelineData).length,
       hasSelectedDate: !!selectedDate,
       rawDataCount: formattedTenders.length,
     });
+
+    // Apply title search filter
+    if (searchQuery.trim()) {
+      const searchFiltered: typeof timelineData = {};
+      Object.entries(timelineData).forEach(([keyword, data]) => {
+        const filteredTenders = data.tenders.filter((group) => {
+          return group.tender.title?.toLowerCase().includes(searchQuery.toLowerCase());
+        });
+
+        if (filteredTenders.length > 0) {
+          // We need to filter rows too
+          const filteredRows = data.rows
+            .map((row) => {
+              // Keep only tenders that match the search
+              const filteredRowTenders = row.tenders.filter((group) => {
+                return group.tender.title?.toLowerCase().includes(searchQuery.toLowerCase());
+              });
+
+              return {
+                ...row,
+                tenders: filteredRowTenders,
+              };
+            })
+            .filter((row) => row.tenders.length > 0); // Remove empty rows
+
+          searchFiltered[keyword] = {
+            tenders: filteredTenders,
+            rows: filteredRows,
+          };
+        }
+      });
+      filtered = searchFiltered;
+    }
 
     // Only apply date filter if a date is explicitly selected
     if (selectedDate) {
@@ -667,6 +702,7 @@ export default function StatisticsPage() {
     selectedDate,
     typeFilter,
     showHighlightedOnly,
+    searchQuery, // Add search query dependency
     formattedTenders.length,
   ]);
 
@@ -733,7 +769,7 @@ export default function StatisticsPage() {
         const maxDate = new Date(Math.max(...dates.map((d) => d.getTime())));
 
         // Add extra months to the end based on zoom level
-        const extraMonths = Math.max(3, Math.round(6 / zoomLevel));
+        const extraMonths = Math.max(3, Math.round(4 / zoomLevel));
         const extendedEndDate = addMonths(maxDate, extraMonths);
 
         console.log("Full timeline range from all tenders:", {
@@ -746,11 +782,11 @@ export default function StatisticsPage() {
           start: minDate,
           end: extendedEndDate,
           defaultViewStart: new Date(
-            today.getFullYear() - 1,
-            today.getMonth(),
+            today.getFullYear(),
+            today.getMonth() - 4,
             today.getDate()
-          ), // For initial scroll
-          defaultViewEnd: today, // For initial scroll
+          ), // For initial scroll postition = 2 months ago
+          defaultViewEnd: today
         };
       }
 
@@ -821,13 +857,14 @@ export default function StatisticsPage() {
         current.setMonth(current.getMonth() + 1);
       }
     }
-
-    console.log(
-      `Generated ${viewMode}:`,
-      result.map((d) =>
-        viewMode === "years" ? format(d, "yyyy") : format(d, "MMM yyyy")
-      )
-    );
+    
+    // Debug log the generated months
+    // console.log(
+    //   `Generated ${viewMode}:`,
+    //   result.map((d) =>
+    //     viewMode === "years" ? format(d, "yyyy") : format(d, "MMM yyyy")
+    //   )
+    // );
 
     return result;
   }, [timelineRange, viewMode]);
@@ -865,11 +902,23 @@ export default function StatisticsPage() {
         if (target === monthHeadersEl) {
           // When month headers are scrolled, update timeline content
           timelineContentEl.scrollLeft = monthHeadersEl.scrollLeft;
-          // console.log("Syncing from headers to content:", monthHeadersEl.scrollLeft);
+          //! Ensure fixed elements maintain their position
+          const fixedColumns = document.querySelectorAll('.sticky.left-0');
+          fixedColumns.forEach(col => {
+            if (col instanceof HTMLElement) {
+              col.style.transform = `translateX(0px)`;
+            }
+          });
         } else if (target === timelineContentEl) {
           // When timeline content is scrolled, update month headers
           monthHeadersEl.scrollLeft = timelineContentEl.scrollLeft;
-          // console.log("Syncing from content to headers:", timelineContentEl.scrollLeft);
+          //! Ensure fixed elements maintain their position
+          const fixedColumns = document.querySelectorAll('.sticky.left-0');
+          fixedColumns.forEach(col => {
+            if (col instanceof HTMLElement) {
+              col.style.transform = `translateX(0px)`;
+            }
+          });
         }
       } catch (error) {
         console.error("Error syncing scroll:", error);
@@ -931,15 +980,27 @@ export default function StatisticsPage() {
     // Add grid lines after a short delay
     const gridLinesTimeoutId = setTimeout(addGridLines, 200);
 
+    // Cleanup function to remove event listeners
     return () => {
-      monthHeadersEl.removeEventListener("scroll", syncScroll);
-      timelineContentEl.removeEventListener("scroll", syncScroll);
+      console.log("Cleaning up scroll sync listeners");
+      if (monthHeadersEl && timelineContentEl) {
+        monthHeadersEl.removeEventListener("scroll", syncScroll);
+        timelineContentEl.removeEventListener("scroll", syncScroll);
+        
+        // Remove any transform styles that might have been applied
+        const fixedColumns = document.querySelectorAll('.sticky.left-0');
+        fixedColumns.forEach(col => {
+          if (col instanceof HTMLElement) {
+            col.style.transform = '';
+          }
+        });
+      }
       clearTimeout(timeoutId);
       clearTimeout(gridLinesTimeoutId);
     };
   }, [months, zoomLevel]);
 
-  // Set initial scroll position to show the default view (past year)
+  // Set initial scroll position to show the default view (2 months ago to 4 months from now if valid tenders)
   useEffect(() => {
     // Wait for timeline to be fully rendered
     const timeoutId = setTimeout(() => {
@@ -953,12 +1014,12 @@ export default function StatisticsPage() {
 
         // Calculate the position to scroll to (to show the default view)
         const timelineStartTime = timelineRange.start.getTime();
-        const defaultViewStartTime = timelineRange.defaultViewStart.getTime();
-        const totalTimelineMs = timelineRange.end.getTime() - timelineStartTime;
+        const defaultViewEndTime = timelineRange.defaultViewEnd.getTime();
+        const totalTimelineMs = defaultViewEndTime - timelineStartTime;
 
         // Calculate the percentage through the timeline
         const scrollPercentage =
-          (defaultViewStartTime - timelineStartTime) / totalTimelineMs;
+          (defaultViewEndTime - timelineStartTime) / totalTimelineMs;
 
         // Get the total scrollable width
         const totalWidth =
@@ -1051,8 +1112,8 @@ export default function StatisticsPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Fixed header - Always visible at the top */}
-      <div className="sticky top-[64px] z-50 pt-2">
+      {/* Scrollable header */}
+      <div className="relative z-40 pt-2">
         <div className="max-w-[1400px] mx-auto px-4 flex items-center justify-between">
           <h1 className="text-3xl font-bold">Tender Timeline</h1>
           <div className="flex items-center gap-4">
@@ -1110,6 +1171,53 @@ export default function StatisticsPage() {
                 </Button>
               </div>
 
+              {/* Add Search input here */}
+              <div className="relative w-[220px]">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search tender titles..."
+                  className="w-full h-8 pl-8 pr-3 text-xs rounded-md border border-input bg-background shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M18 6 6 18" />
+                      <path d="m6 6 12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
               {/* Type filter */}
               <Select
                 value={typeFilter || "all"}
@@ -1134,7 +1242,11 @@ export default function StatisticsPage() {
               <Button
                 variant={showHighlightedOnly ? "default" : "outline"}
                 size="sm"
-                className="h-8"
+                className={
+                  showHighlightedOnly
+                    ? "h-8 bg-yellow-500 text-white"
+                    : "h-8 hover:bg-yellow-300 hover:shadow-[0_0_10px_rgba(255,215,0,0.5)]"
+                }
                 onClick={() => setShowHighlightedOnly(!showHighlightedOnly)}
               >
                 {showHighlightedOnly ? "Highlighted Only" : "Show Highlighted"}
@@ -1192,9 +1304,16 @@ export default function StatisticsPage() {
                   <div className="flex flex-col">
                     {/* Month headers - Sticky at top */}
                     <div className="sticky z-40 bg-background/95 backdrop-blur-sm border-b-2 dark:border-gray-800 dark:bg-gray-900/50">
-                      <div className="flex">
+                      <div className="flex relative">
                         {/* Fixed keyword column header */}
-                        <div className="w-[200px] shrink-0 font-medium sticky left-0 z-50 border-r-2 bg-background/95 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/50">
+                        <div
+                          className="w-[200px] shrink-0 font-medium sticky left-0 z-50 border-r-2 bg-background/95 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/50"
+                          style={{
+                            position: "sticky",
+                            left: 0,
+                            boxShadow: "4px 0 8px rgba(0, 0, 0, 0.05)",
+                          }}
+                        >
                           <div className="flex items-center justify-center h-[60px]">
                             Keywords
                           </div>
@@ -1205,8 +1324,10 @@ export default function StatisticsPage() {
                           ref={monthHeadersRef}
                           className="overflow-x-auto scrollbar-hide"
                           style={{
-                            maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
+                            maxWidth: "calc(100% - 200px)", // Match exactly with the keyword column width
                             scrollbarWidth: "none", // Firefox
+                            position: "relative", // Ensure proper positioning
+                            marginLeft: "auto", // Push content away from fixed column
                           }}
                         >
                           <div
@@ -1283,19 +1404,49 @@ export default function StatisticsPage() {
                         }
                       }}
                     >
-                      <div className="flex">
+                      <div className="flex relative">
                         {/* Fixed keyword column */}
-                        <div className="w-[200px] shrink-0 sticky left-0 z-40 bg-background/90 backdrop-blur-sm border-r-2 dark:border-gray-800 dark:bg-gray-900/50">
+                        <div
+                          className="w-[200px] shrink-0 sticky left-0 z-40 bg-background/90 backdrop-blur-sm border-r-2 dark:border-gray-800 dark:bg-gray-900/50"
+                          style={{
+                            position: "sticky",
+                            left: 0,
+                            boxShadow: "4px 0 8px rgba(0, 0, 0, 0.05)",
+                            isolation: "isolate",
+                          }}
+                        >
                           {Object.entries(filteredData).map(
                             ([keyword, data], index) => {
                               return (
                                 <div
                                   key={keyword}
-                                  className="border-b border-border dark:border-gray-800"
+                                  className="group relative border-b border-border dark:border-gray-800"
                                   ref={(el) => {
                                     sectionRefs.current[keyword] = el;
                                   }}
                                 >
+                                  {/* Sticky keyword header */}
+                                  {data.rows.length > 0 && (
+                                    <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm h-[60px]">
+                                      <div className="w-full space-y-1 px-4 py-2">
+                                        <div className="font-medium text-end relative group gap-0">
+                                          <span className="inline-block max-w-[180px] truncate">
+                                            {keyword}
+                                          </span>
+                                          {keyword.length > 18 && (
+                                            <div className="absolute right-0 scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right dark:bg-gray-800/95 dark:shadow-lg dark:border dark:border-gray-700">
+                                              {keyword}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground text-end">
+                                          {data.tenders.length} tenders
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Rest of the rows */}
                                   {data.rows.length === 0 ? (
                                     // Empty row to match the timeline row
                                     <div className="h-[60px] flex items-center px-4 group">
@@ -1317,30 +1468,16 @@ export default function StatisticsPage() {
                                     </div>
                                   ) : (
                                     // Create matching rows for each timeline row
-                                    data.rows.map((_, rowIndex) => (
-                                      <div
-                                        key={`${keyword}-row-${rowIndex}`}
-                                        className="h-[60px] flex items-center px-4 group"
-                                      >
-                                        {rowIndex === 0 && (
-                                          <div className="w-full space-y-1">
-                                            <div className="font-medium text-end relative group">
-                                              <span className="inline-block max-w-[180px] truncate">
-                                                {keyword}
-                                              </span>
-                                              {keyword.length > 18 && (
-                                                <div className="absolute right-0 top-[-5px] scale-0 bg-background/95 shadow-md rounded-md p-2 text-sm z-50 transform transition-transform duration-150 group-hover:scale-100 origin-top-right dark:bg-gray-800/95 dark:shadow-lg dark:border dark:border-gray-700">
-                                                  {keyword}
-                                                </div>
-                                              )}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground text-end">
-                                              {data.tenders.length} tenders
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))
+                                    data.rows
+                                      .slice(0, data.rows.length - 1)
+                                      .map((_, rowIndex) => (
+                                        <div
+                                          key={`${keyword}-row-${rowIndex}`}
+                                          className="h-[60px] flex items-center px-4 group"
+                                        >
+                                          <div className="w-full space-y-1"></div>
+                                        </div>
+                                      ))
                                   )}
                                 </div>
                               );
@@ -1353,8 +1490,10 @@ export default function StatisticsPage() {
                           ref={timelineContentRef}
                           className="overflow-x-auto scrollbar-hide"
                           style={{
-                            maxWidth: "calc(100% - 220px)", // Match exactly with the keyword column width
+                            maxWidth: "calc(100% - 200px)", // Match exactly with the keyword column width
                             scrollbarWidth: "none", // Firefox
+                            position: "relative", // Ensure proper positioning
+                            marginLeft: "auto", // Push content away from fixed column
                           }}
                         >
                           <div
@@ -1654,9 +1793,9 @@ export default function StatisticsPage() {
                 )}
               </Card>
 
-              {/* Deprecated tenders section */}
-              {/* Show deprecated toggle as a text button */}
-              <div className="flex items-center justify-center w-full">
+              {/* Deprecated tenders section - Remove top spacing */}
+              <div className="flex items-center justify-center w-full mt-0">
+                {" "}
                 <Button
                   variant="link"
                   className={cn(
@@ -1675,7 +1814,7 @@ export default function StatisticsPage() {
                   ) : (
                     <>
                       <ChevronDown className="h-3.5 w-3.5" />
-                      Show deprecated keywords tenders ({" "}
+                      Show tenders with no relevant keywords ({" "}
                       {deprecatedTendersCount} )
                     </>
                   )}
@@ -1684,12 +1823,14 @@ export default function StatisticsPage() {
 
               {/* Deprecated tenders display */}
               {showDeprecatedTenders && (
-                <div className="mt-6">
-                  <div className="bg-muted/30 p-4 rounded-lg border border-border">
+                <div className="mt-2">
+                  {" "}
+                  <div className="bg-muted/50 p-4 rounded-lg border border-border">
+                    {" "}
+                    {/* Added negative margin */}
                     <h3 className="text-base font-medium mb-4">
                       Deprecated Tenders
                     </h3>
-
                     {/* Potential deprecated keywords */}
                     {deprecatedKeywords.length > 0 && (
                       <div className="mb-4">
@@ -1719,39 +1860,61 @@ export default function StatisticsPage() {
                         </div>
                       </div>
                     )}
-
                     {/* Deprecated tenders list */}
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {formattedDeprecatedTenders.length > 0 ? (
-                        formattedDeprecatedTenders.map((group) => (
-                          <div
-                            key={group.tender.id}
-                            className="p-2.5 bg-background/80 rounded-md border border-border hover:border-primary/30 transition-colors cursor-pointer"
-                            onClick={() => setSelectedTender(group)}
-                          >
-                            <div className="flex flex-col">
-                              <h4 className="font-medium text-sm line-clamp-1">
-                                {group.tender.title}
-                              </h4>
-                              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Badge
-                                  variant="secondary"
-                                  className="text-[10px] h-4 px-1"
-                                >
-                                  {group.tender.type || "Unknown"}
-                                </Badge>
-                                {group.tender.startDate && (
-                                  <span>
-                                    {format(
-                                      parseTenderDate(group.tender.startDate),
-                                      "MMM d, yyyy"
+                        formattedDeprecatedTenders.map((group) => {
+                          // Use the actual tender tags instead of extracting from title
+                          const tenderTags = Array.isArray(group.tender.tags) ? group.tender.tags : [];
+                            
+                          return (
+                            <div
+                              key={group.tender.id}
+                              className="p-2.5 bg-background/80 rounded-md border border-border hover:border-primary/30 transition-colors cursor-pointer"
+                              onClick={() => setSelectedTender(group)}
+                            >
+                              <div className="flex flex-col">
+                                <h4 className="font-medium text-sm line-clamp-1">
+                                  {group.tender.title}
+                                </h4>
+                                <div className="mt-1 flex items-center justify-between gap-1.5 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] h-4 px-1"
+                                    >
+                                      {group.tender.type || "Unknown"}
+                                    </Badge>
+                                    {group.tender.startDate && (
+                                      <span>
+                                        {format(
+                                          parseTenderDate(group.tender.startDate),
+                                          "MMM d, yyyy"
+                                        )}
+                                      </span>
                                     )}
-                                  </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Add actual tender tags */}
+                                {tenderTags.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    <span className="text-[10px] text-muted-foreground mr-1">Tags:</span>
+                                    {tenderTags.map((tag: string, idx: number) => (
+                                      <Badge
+                                        key={idx}
+                                        variant="outline"
+                                        className="text-[9px] h-4 px-1 bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400"
+                                      >
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="text-center py-4 text-muted-foreground col-span-2">
                           No deprecated tenders found
@@ -2251,9 +2414,12 @@ export default function StatisticsPage() {
                   </TabsContent>
 
                   {/* Versions tab */}
-                  <TabsContent value="versions" className="p-6 space-y-0 mt-0 relative">
+                  <TabsContent
+                    value="versions"
+                    className="p-6 space-y-0 mt-0 relative"
+                  >
                     {/* Instead of a continuous line, we'll position line segments between the icons */}
-                    
+
                     {selectedTender.versions?.map((version, index, array) => (
                       <div key={index} className="relative z-10 mb-0">
                         {/* Container to group an icon with its following card */}
@@ -2262,32 +2428,45 @@ export default function StatisticsPage() {
                           <div className="flex items-center mb-3 gap-4">
                             {/* Git icon node */}
                             <div className="relative w-[1.8rem] h-[1.8rem] rounded-full bg-gray-100 dark:bg-gray-800 border-2 border-white dark:border-gray-900 z-20 flex items-center justify-center shadow-sm">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400">
-                                <circle cx="12" cy="12" r="4"/>
-                                <path d="M1.05 12H7"/>
-                                <path d="M17.01 12h5.95"/>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="text-blue-600 dark:text-blue-400"
+                              >
+                                <circle cx="12" cy="12" r="4" />
+                                <path d="M1.05 12H7" />
+                                <path d="M17.01 12h5.95" />
                               </svg>
                             </div>
-                            
+
                             {/* Date, aligned with the icon */}
                             <span className="text-xs text-muted-foreground font-medium">
                               {format(parseTenderDate(version.date), "PPP")}
                             </span>
                           </div>
-                          
+
                           {/* Card content row with vertical line */}
                           <div className="flex">
                             {/* Vertical line container */}
                             <div className="relative w-[3rem] flex-shrink-0">
                               {/* Vertical line that now appears for all items, with special handling for the last one */}
-                              <div className={cn(
-                                "absolute left-[14px] w-[1.5px] bg-gray-200 dark:bg-gray-700 z-10",
-                                index < array.length - 1 
-                                  ? "top-0 bottom-4" // Full height for non-last items
-                                  : "top-0 h-full max-h-[185px]" // Limited height for last item, only extends to card height
-                              )}></div>
+                              <div
+                                className={cn(
+                                  "absolute left-[14px] w-[1.5px] bg-gray-200 dark:bg-gray-700 z-10",
+                                  index < array.length - 1
+                                    ? "top-0 bottom-4" // Full height for non-last items
+                                    : "top-0 h-full max-h-[185px]" // Limited height for last item, only extends to card height
+                                )}
+                              ></div>
                             </div>
-                            
+
                             {/* Card container */}
                             <div className="flex-grow">
                               <Card className="overflow-hidden border-none shadow-md max-w-full mb-8">
@@ -2320,15 +2499,22 @@ export default function StatisticsPage() {
                                         .map(([key, value], idx) => (
                                           <div
                                             key={key}
-                                            className={cn("flex items-start p-3 hover:bg-muted/30 transition-colors", 
-                                              idx % 2 === 0 ? "bg-transparent" : "bg-muted/10"
+                                            className={cn(
+                                              "flex items-start p-3 hover:bg-muted/30 transition-colors",
+                                              idx % 2 === 0
+                                                ? "bg-transparent"
+                                                : "bg-muted/10"
                                             )}
                                           >
                                             <dt className="w-1/3 text-xs font-medium text-muted-foreground truncate mr-2">
                                               {key}
                                             </dt>
                                             <dd className="w-2/3 text-xs break-words">
-                                              {value as string || <span className="text-muted-foreground italic">N/A</span>}
+                                              {(value as string) || (
+                                                <span className="text-muted-foreground italic">
+                                                  N/A
+                                                </span>
+                                              )}
                                             </dd>
                                           </div>
                                         ))}

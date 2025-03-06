@@ -870,6 +870,63 @@ export function TenderBoard({ className, initialTenders = [], onArchive }: Tende
     };
   }, []);
 
+  // Add this new effect to listen for keyword deletion
+  useEffect(() => {
+    async function handleKeywordDeleted(event: CustomEvent) {
+      const { keyword, text } = event.detail;
+      console.log("Keyword deleted:", keyword, text);
+      
+      if (!user?.id || !keyword || !text) return;
+      
+      try {
+        // Find tenders that ONLY have this keyword as a tag
+        const tendersToArchive = localTenders.filter(group => {
+          // Skip already archived tenders
+          if (group.tender.isArchived || group.tender.archived) {
+            return false;
+          }
+          
+          // Skip highlighted tenders - don't automatically archive them
+          if (group.tender.isHighlighted) {
+            return false;
+          }
+          
+          // Get the tender tags
+          const tenderTags = Array.isArray(group.tender.tags) ? group.tender.tags : [];
+          
+          // Check if this tender ONLY has the deleted keyword as its tag
+          return tenderTags.length === 1 && tenderTags[0] === text;
+        });
+        
+        console.log(`Found ${tendersToArchive.length} tenders to archive for deleted keyword: ${text}`);
+        
+        // Archive each tender
+        for (const group of tendersToArchive) {
+          await handleArchive(group.tender.id, true);
+        }
+        
+        // Show toast notification if any tenders were archived
+        if (tendersToArchive.length > 0) {
+          toast({
+            title: "Tenders Archived",
+            description: `Archived ${tendersToArchive.length} tenders with deleted keyword: "${text}"`,
+            variant: "info",
+            duration: 5000,
+          });
+        }
+      } catch (error) {
+        console.error("Error handling keyword deletion:", error);
+      }
+    }
+
+    // Add event listener
+    window.addEventListener('keywordDeleted', handleKeywordDeleted as EventListener);
+
+    return () => {
+      window.removeEventListener('keywordDeleted', handleKeywordDeleted as EventListener);
+    };
+  }, [user?.id, localTenders, toast, handleArchive]);
+
   return (
     <div className={cn("h-[87vh] rounded-lg shadow-sm", className)}>
       <div className="flex flex-col h-full">

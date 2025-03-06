@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Copy, Check, FileText, FileJson, AlertCircle } from "lucide-react";
+import { Download, Copy, Check, FileText, FileJson, AlertCircle, AlertTriangle } from "lucide-react";
 import { 
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { TenderCard } from "@/components/dashboard/tender-card";
 import ReactDOM from "react-dom/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Create a custom FilePdf icon since it might not be available in lucide-react
 const FilePdf = (props: any) => (
@@ -55,6 +56,30 @@ export function ExportButton({ tenders }: ExportButtonProps) {
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const [exportProgress, setExportProgress] = useState(0);
   const [totalExportItems, setTotalExportItems] = useState(0);
+  const [isProPlan, setIsProPlan] = useState(false);
+
+  // Add a useEffect to fetch user subscription status
+  useEffect(() => {
+    const fetchSubscriptionStatus = async () => {
+      try {
+        const response = await fetch('/api/users/subscription');
+        if (!response.ok) throw new Error('Failed to fetch subscription');
+        const data = await response.json();
+        setIsProPlan(data.isProPlan || false);
+      } catch (error) {
+        console.error('Error fetching subscription status:', error);
+        // Default to free tier if there's an error
+        setIsProPlan(false);
+      }
+    };
+    
+    fetchSubscriptionStatus();
+  }, []);
+
+  // Add a helper function to check if the current format requires pro plan
+  const requiresProPlan = () => {
+    return (exportFormat === "text" || exportFormat === "pdf") && !isProPlan;
+  };
 
   //@ Formats date from YYYYMMDD to MM/DD format with optional year
   const formatDate = (dateNum: number | undefined, includeYear: boolean = false): string => {
@@ -200,15 +225,15 @@ export function ExportButton({ tenders }: ExportButtonProps) {
                 content += `\n${primaryUrl}`;
                 
                 // Count how many other versions have different URLs
-                const otherVersionsWithUrls = tender.versions.filter(v => {
-                  const vUrl = v.enrichedData?.url || v.data?.detail?.url;
-                  return vUrl && vUrl !== primaryUrl;
-                }).length;
+                // const otherVersionsWithUrls = tender.versions.filter(v => {
+                //   const vUrl = v.enrichedData?.url || v.data?.detail?.url;
+                //   return vUrl && vUrl !== primaryUrl;
+                // }).length;
 
-                // If there are other versions with different URLs, mention them
-                if (otherVersionsWithUrls > 0) {
-                  content += `\n(另有 ${otherVersionsWithUrls - 1} 個版本)`;
-                }
+                // // If there are other versions with different URLs, mention them
+                // if (otherVersionsWithUrls > 0) {
+                //   content += `\n(另有 ${otherVersionsWithUrls - 1} 個版本)`;
+                // }
               }
             }
             
@@ -723,7 +748,7 @@ export function ExportButton({ tenders }: ExportButtonProps) {
     json: "Exports all tender data in JSON format, including all metadata and related information. Useful for data analysis or importing into other systems.",
     text: "Exports tenders in a readable text format organized by date and tag. Includes titles, publication dates, deadlines, and URLs. Ideal for sharing or printing.",
     pdf: "Exports tenders as a formatted PDF document with proper layout and styling. Each tender and its versions will be exported as separate pages in the PDF.",
-    pdfWarning: "Caveats: PDF export will only work in light mode. Dark mode is not supported."
+    pdfWarning: "Exports will only work in light mode. Dark mode is not supported."
   };
 
   // Get the appropriate icon for the current format
@@ -771,7 +796,7 @@ export function ExportButton({ tenders }: ExportButtonProps) {
               onValueChange={(value) => setExportFormat(value as "json" | "text" | "pdf")}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4 rounded-md">
                 <TabsTrigger value="json">JSON</TabsTrigger>
                 <TabsTrigger value="text">Text</TabsTrigger>
                 <TabsTrigger value="pdf">PDF</TabsTrigger>
@@ -787,16 +812,31 @@ export function ExportButton({ tenders }: ExportButtonProps) {
                 <div className="text-sm text-muted-foreground">
                   {formatDescriptions.text}
                 </div>
+                {!isProPlan && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      Text export requires a Pro subscription. <a href="/dashboard/settings" className="underline font-medium">Upgrade now</a> to unlock this feature.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </TabsContent>
               
               <TabsContent value="pdf" className="ml-2 mt-6">
                 <div className="text-sm text-muted-foreground">
                   {formatDescriptions.pdf}
                 </div>
-                <br/>
-                <div className="text-sm text-red-600">
+                <div className="text-sm text-bold underline">
                   {formatDescriptions.pdfWarning}
                 </div>
+                {!isProPlan && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      PDF export requires a Pro subscription. <a href="/dashboard/settings" className="underline font-medium">Upgrade now</a> to unlock this feature.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -804,7 +844,21 @@ export function ExportButton({ tenders }: ExportButtonProps) {
           <div className="space-y-2 md:col-span-8">
             <div className="text-base font-medium">Preview:</div>
             <div className="h-[300px] w-full rounded-md border p-4 bg-muted overflow-auto">
-              {exportFormat === "json" ? (
+              {requiresProPlan() ? (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Pro Feature</h3>
+                  <p className="text-sm text-center mb-4">
+                    {exportFormat === "text" ? "Text" : "PDF"} export is available with Pro subscription
+                  </p>
+                  <a 
+                    href="/dashboard/settings" 
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Upgrade to Pro
+                  </a>
+                </div>
+              ) : exportFormat === "json" ? (
                 <pre className="text-xs" style={{ whiteSpace: 'pre' }}>
                   {jsonPreview()}
                 </pre>
@@ -829,22 +883,32 @@ export function ExportButton({ tenders }: ExportButtonProps) {
         <div className="flex justify-center gap-4">
           <Button 
             onClick={handleExport} 
-            disabled={isExporting || tenders.length === 0}
+            disabled={isExporting || tenders.length === 0 || requiresProPlan()}
             className="px-8"
           >
             {getFormatIcon()}
-            {isExporting ? "Exporting..." : `Export as ${exportFormat.toUpperCase()}`}
+            {isExporting 
+              ? "Exporting..." 
+              : requiresProPlan() 
+                ? `${exportFormat.toUpperCase()} (Pro Only)` 
+                : `Export as ${exportFormat.toUpperCase()}`
+            }
           </Button>
           
           {(exportFormat === "json" || exportFormat === "text") && (
             <Button 
               variant="outline" 
               onClick={copyToClipboard} 
-              disabled={isExporting || tenders.length === 0 || isCopied}
+              disabled={isExporting || tenders.length === 0 || isCopied || requiresProPlan()}
               className="px-8"
             >
               {isCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-              {isCopied ? "Copied!" : "Copy to Clipboard"}
+              {isCopied 
+                ? "Copied!" 
+                : requiresProPlan() 
+                  ? "Copy (Pro Only)" 
+                  : "Copy to Clipboard"
+              }
             </Button>
           )}
         </div>

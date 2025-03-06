@@ -14,7 +14,6 @@ import { useUser } from "@clerk/nextjs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
-import Image from "next/image";
 import {
   getKeywordsAction,
   addKeywordAction,
@@ -44,10 +43,10 @@ const SUBSCRIPTION_TIERS = {
     description: "Advanced features for power users",
     features: [
       "Unlimited saved keywords",
-      "Priority email notifications",
+      "Selective email notifications",
+      "Advanced timeline analytics",
+      "Export to PDFs",
       "30-day tender history",
-      "Advanced analytics",
-      "Bulk export"
     ],
     action: "Upgrade"
   }

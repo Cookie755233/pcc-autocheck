@@ -150,7 +150,7 @@ export function ThemeEffect() {
           position: absolute;
           width: 80px;
           height: 80px;
-          offset-path: path("M 500,800 Q 1050,0 1600,850");
+          offset-path: path("M 300,800 Q 900,0 1500,850");
           animation: follow-path 1.5s ease-in-out forwards;
           will-change: offset-distance;
         }
