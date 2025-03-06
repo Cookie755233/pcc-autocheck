@@ -773,7 +773,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
             {/* Stats summary */}
             {searchStats.addedToBoard > 0 && (
               <p className="text-green-600 dark:text-green-400 mt-0.5 text-center">
-                Found {searchStats.addedToBoard} tenders matching your keywords
+                Found {searchStats.addedToBoard} tenders matching your search conditions
               </p>
             )}
           </div>

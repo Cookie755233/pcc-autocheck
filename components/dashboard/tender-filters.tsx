@@ -285,9 +285,36 @@ export function TenderFilters({
       return parseInt(format(date, 'yyyyMMdd'))
     } catch (error) {
       console.error('Error formatting date:', date, error)
-      return dateRange[0] // fallback to start date
+      return 0
     }
   }
+
+  //! Add safe date formatting helper to prevent errors when no tenders are available
+  const safeFormatDate = (baseDate: Date, monthsToAdd: number, formatStr: string) => {
+    try {
+      // Validate the base date is valid
+      if (!baseDate || isNaN(baseDate.getTime())) {
+        return '—';
+      }
+      const newDate = addMonths(baseDate, monthsToAdd);
+      // Ensure the result is a valid date
+      if (isNaN(newDate.getTime())) {
+        return '—';
+      }
+      return format(newDate, formatStr);
+    } catch (error) {
+      console.error('Error safely formatting date:', error);
+      return '—';
+    }
+  };
+
+  //! Check if we have valid date ranges
+  const hasValidDateRange = startMonth && 
+    endMonth && 
+    !isNaN(startMonth.getTime()) && 
+    !isNaN(endMonth.getTime()) && 
+    dateRange.length === 2 && 
+    dateRange.every(d => d > 0);
 
   // Get unique organizations - FIXED to check all possible locations
   const organizations = useMemo(() => {
@@ -601,32 +628,46 @@ export function TenderFilters({
         <h4 className="text-sm font-medium mb-2">Date Range</h4>
         <div className="px-2">
           <div className="text-center text-sm text-muted-foreground mb-2">
-            {format(addMonths(startMonth, currentValue[0]), 'yyyy/MM')} - {format(addMonths(startMonth, currentValue[1]), 'yyyy/MM')}
+            {hasValidDateRange ? (
+              <>
+                {safeFormatDate(startMonth, currentValue[0], 'yyyy/MM')} - {safeFormatDate(startMonth, currentValue[1], 'yyyy/MM')}
+              </>
+            ) : (
+              <span>No date range available</span>
+            )}
           </div>
-          <Slider
-            min={0}
-            max={monthDiff}
-            step={1}
-            defaultValue={[0, monthDiff]}
-            onValueChange={(value) => {
-              try {
-                const startDate = addMonths(startMonth, value[0])
-                const endDate = addMonths(startMonth, value[1])
-                const newStartDate = parseInt(format(startDate, 'yyyyMMdd'))
-                const newEndDate = parseInt(format(endDate, 'yyyyMMdd'))
-                setCurrentDateRange([newStartDate, newEndDate])
-                setCurrentValue(value) // Store current value for display
-                updateFilters({ dateRange: [newStartDate, newEndDate] })
-              } catch (error) {
-                console.error('Error updating date range:', error)
-              }
-            }}
-            className="my-4"
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{format(startMonth, 'yyyy/MM')}</span>
-            <span>{format(endMonth, 'yyyy/MM')}</span>
-          </div>
+          {hasValidDateRange ? (
+            <>
+              <Slider
+                min={0}
+                max={monthDiff}
+                step={1}
+                defaultValue={[0, monthDiff]}
+                onValueChange={(value) => {
+                  try {
+                    const startDate = addMonths(startMonth, value[0])
+                    const endDate = addMonths(startMonth, value[1])
+                    const newStartDate = parseInt(format(startDate, 'yyyyMMdd'))
+                    const newEndDate = parseInt(format(endDate, 'yyyyMMdd'))
+                    setCurrentDateRange([newStartDate, newEndDate])
+                    setCurrentValue(value) // Store current value for display
+                    updateFilters({ dateRange: [newStartDate, newEndDate] })
+                  } catch (error) {
+                    console.error('Error updating date range:', error)
+                  }
+                }}
+                className="my-4"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{safeFormatDate(startMonth, 0, 'yyyy/MM')}</span>
+                <span>{safeFormatDate(endMonth, 0, 'yyyy/MM')}</span>
+              </div>
+            </>
+          ) : (
+            <div className="py-4 text-center text-sm text-muted-foreground">
+              Date slider unavailable until tenders are loaded
+            </div>
+          )}
         </div>
       </div>
     </div>
