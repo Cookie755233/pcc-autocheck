@@ -12,14 +12,14 @@ export interface TenderBrief {
 }
 
 export interface TenderRecord {
-  unit_id: string
-  job_number: string
-  [key: string]: any  // For other fields from the API
+  unit_id: string;
+  job_number: string;
+  [key: string]: any; // For other fields from the API
 }
 
 export interface APIResponse {
-  records: TenderRecord[]
-  [key: string]: any
+  records: TenderRecord[];
+  [key: string]: any;
 }
 
 export interface Tender {
@@ -34,6 +34,7 @@ export interface Tender {
   isArchived: boolean;
   isHighlighted: boolean;
   isNew?: boolean;
+  tags?: string[];
   brief?: {
     title?: string;
     type?: string;
@@ -71,4 +72,4 @@ export interface TenderDetail {
   detail: Record<string, any>;
   fetched_at: string;
   // ... add other detail fields as needed
-} 
+}
