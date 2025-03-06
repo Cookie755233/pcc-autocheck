@@ -8,12 +8,17 @@ datasource db {
 }
 
 model User {
-  id          String       @id
-  email       String       @unique
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  keywords    Keyword[]
-  tenderViews TenderView[]
+  id                    String       @id
+  email                 String       @unique
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  subscriptionId        String?
+  subscriptionStatus    String?
+  emailNotifications    Boolean      @default(true)
+  subscriptionExpiresAt DateTime?
+  subscriptionTier      String       @default("free")
+  keywords              Keyword[]
+  tenderViews           TenderView[]
 
   @@map("users")
 }
@@ -22,9 +27,9 @@ model Keyword {
   id        String   @id @default(cuid())
   text      String
   userId    String
-  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
   user      User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, text])
@@ -45,10 +50,10 @@ model Tender {
 model TenderVersion {
   id        String   @id @default(cuid())
   tenderId  String
-  date      BigInt   // Using BigInt for timestamp (getTime())
-  type      String   // Tender type
-  data      Json     // Full tender data
+  data      Json
   createdAt DateTime @default(now())
+  date      BigInt
+  type      String
   tender    Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
 
   @@unique([tenderId, date, type])
@@ -56,16 +61,28 @@ model TenderVersion {
 }
 
 model TenderView {
-  id         String   @id @default(cuid())
-  userId     String
-  tenderId   String
-  isArchived Boolean  @default(false)
-  isHighlighted Boolean @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  tender     Tender   @relation(fields: [tenderId], references: [id])
-  user       User     @relation(fields: [userId], references: [id])
+  id            String   @id @default(cuid())
+  userId        String
+  tenderId      String
+  isArchived    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  isHighlighted Boolean  @default(false)
+  tender        Tender   @relation(fields: [tenderId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, tenderId])
   @@map("tender_views")
+}
+
+model PaypalPlan {
+  id          String   @id
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  description String?
+  planType    String   @default("pro")
+  status      String
+
+  @@map("paypal_plans")
 }

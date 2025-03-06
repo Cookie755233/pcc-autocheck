@@ -4,7 +4,7 @@ import * as React from "react"
 import { UserButton } from "@clerk/nextjs"
 import { ModeToggle } from "@/components/ui/mode-toggle"
 import Link from "next/link"
-import { Bell, LayoutDashboard, BarChartHorizontal, Settings } from "lucide-react"
+import { Bell, LayoutDashboard, BarChartHorizontal, Settings, Sparkles } from "lucide-react"
 import { useNotifications } from "@/contexts/notification-context"
 import { useRouter, usePathname } from "next/navigation"
 import {
@@ -14,8 +14,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+import { useSubscription } from "@/lib/contexts/subscription-context"
+import { PageTransition } from "@/components/page-transition"
+import { SubscriptionBadge } from "@/components/subscription-badge"
 
 function formatTenderDate(date: number | string | undefined): string {
   if (!date) return 'Recently';
@@ -51,6 +55,7 @@ export default function DashboardLayout({
   const { notifications, markAsRead, markAllAsRead } = useNotifications()
   const router = useRouter()
   const pathname = usePathname()
+  const { subscriptionTier, isLoading: isLoadingSubscription } = useSubscription()
 
   const hasUnreadNotifications = notifications.length > 0
 
@@ -75,7 +80,9 @@ export default function DashboardLayout({
 
           {/* Right side controls */}
           <div className="flex items-center gap-4">
-
+            {/* Subscription Badge */}
+            {!isLoadingSubscription && <SubscriptionBadge />}
+            
             {/* Statistics Button */}
             <Button
               variant="ghost"
@@ -179,6 +186,7 @@ export default function DashboardLayout({
             </Button>
             
             <UserButton afterSignOutUrl="/" />
+
           </div>
         </div>
       </nav>

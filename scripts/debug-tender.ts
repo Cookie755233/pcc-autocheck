@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client'
-import { serializeData } from '../lib/utils'
 
 const prisma = new PrismaClient()
 

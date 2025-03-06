@@ -821,6 +821,7 @@ export default function StatisticsPage() {
           line.style.left = `${i * monthWidth}px`;
           line.style.height = '100%';
           line.style.zIndex = '1';
+          line.style.backgroundColor = 'transparent'; // Make the line transparent
           container.appendChild(line);
         });
       } catch (error) {
@@ -1090,7 +1091,9 @@ export default function StatisticsPage() {
                             style={{ 
                               width: `${Math.max(1200, months.length * (viewMode === 'years' ? 200 : 100)) * zoomLevel}px`,
                               minWidth: "100%",
-                              transition: 'width 0.5s ease'
+                              transition: 'width 0.5s ease',
+                              border: "none",  // Ensure no borders are applied
+                              backgroundColor: "transparent" // Ensure no background to avoid visual separation
                             }}
                           >
                             {months.map((date, i) => (
@@ -1100,15 +1103,15 @@ export default function StatisticsPage() {
                                 style={{ 
                                   width: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
                                   minWidth: `${(viewMode === 'years' ? 200 : 100) * zoomLevel}px`,
+                                  border: "none",  // Explicitly remove borders from each month div
+                                  backgroundColor: "transparent" // Ensure transparent background
                                 }}
                               >
                                 {viewMode === 'years' ? (
-                                  // Year view
                                   <div className="text-center text-base font-semibold">
                                     {format(date, 'yyyy')}
                                   </div>
                                 ) : zoomLevel < 0.75 ? (
-                                  // Compact month view
                                   <div className="text-center">
                                     <div className="text-sm">{format(date, 'MMM')}</div>
                                     {i === 0 || date.getMonth() === 0 ? (
@@ -1118,7 +1121,6 @@ export default function StatisticsPage() {
                                     ) : null}
                                   </div>
                                 ) : (
-                                  // Regular month view
                                   <div className="text-sm">
                                     {format(date, 'MMM yyyy')}
                                   </div>

@@ -5,9 +5,10 @@ import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
 import { NotificationProvider } from "@/contexts/notification-context"
-import { useEffect, useRef } from "react"
 import { ThemeEffect } from '@/components/ui/theme-effect'
 import { Metadata } from 'next'
+import { SubscriptionProvider } from '@/lib/contexts/subscription-context'
+import { NavigationProgress } from "@/components/navigation-progress"
 
 const inter = Inter({ subsets: ["latin"] })
 const headingFont = Montserrat({ 
@@ -34,6 +35,9 @@ export default function RootLayout({
           headingFont.variable,
           "min-h-screen bg-background relative"
         )}>
+          {/* Add navigation progress indicator */}
+          <NavigationProgress />
+          
           {/* Colored blurred dots background (behind the dot pattern) */}
           <div className="bg-colored-dots" />
           
@@ -45,11 +49,15 @@ export default function RootLayout({
             defaultTheme="system"
             enableSystem={false}
           >
-            <NotificationProvider>
-              <Toaster />
-              {children}
-              <ThemeEffect />
-            </NotificationProvider>
+            <SubscriptionProvider>
+              <NotificationProvider>
+                <Toaster />
+                <div className="page-transition-wrapper">
+                  {children}
+                </div>
+                <ThemeEffect />
+              </NotificationProvider>
+            </SubscriptionProvider>
           </ThemeProvider>
         </body>
       </html>

@@ -117,14 +117,27 @@ export async function processTenders(keywords: string[], userId: string) {
   }
 
   try {
+    // Ensure user exists in database
     await userService.ensureUser(userId)
+    
+    // Check subscription status for keyword limits
+    const user = await userService.getUserWithSubscription(userId);
+    const isProUser = user?.subscriptionTier === 'pro' && user?.subscriptionStatus === 'ACTIVE';
+    
+    // Limit keywords for free users
+    let processKeywords = keywords;
+    if (!isProUser && keywords.length > 5) {
+      processKeywords = keywords.slice(0, 5);
+      console.log(`User ${userId} is on free plan. Limiting to 5 keywords.`);
+    }
+    
     // Define proper type for results
     const results: {
       tender: any;
       versions: any[];
     }[] = [];
 
-    for (const keyword of keywords) {
+    for (const keyword of processKeywords) {
       // console.log(`Processing keyword: ${keyword}`)
       const tenders = await searchTenders(keyword)
       // console.log(`Found ${tenders.length} tenders for keyword "${keyword}"`)
@@ -240,7 +253,7 @@ export async function processTenders(keywords: string[], userId: string) {
 
     return results
   } catch (error) {
-    console.error('Error fetching tenders by keywords:', error)
+    console.error('Error processing tenders:', error)
     throw error
   }
 }

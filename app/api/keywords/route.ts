@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs'
 import { db } from '@/lib'
 import { getUserKeywords, addKeyword, deleteKeyword } from '@/lib/services/keyword-service'
+import { userService } from '@/lib/services/user-service'
 
 export async function GET() {
   try {
@@ -54,15 +55,14 @@ export async function POST(request: Request) {
       return new NextResponse('Keyword is required', { status: 400 })
     }
 
-    // Ensure user exists first
-    await db.user.upsert({
-      where: { id: userId },
-      create: {
-        id: userId,
-        email: `${userId}@placeholder.com`,
-      },
-      update: {}
-    })
+    // Get email from Clerk
+    const { sessionClaims } = auth();
+    const email = sessionClaims?.email as string;
+    
+    console.log('Keywords API - User info:', { userId, email });
+
+    // Ensure user exists first with proper email
+    await userService.ensureUser(userId, email);
 
     // Use upsert instead of create to handle duplicates
     const keyword = await db.keyword.upsert({

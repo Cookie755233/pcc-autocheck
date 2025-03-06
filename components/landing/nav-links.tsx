@@ -1,7 +1,5 @@
 'use client'
 
-import { Button } from "@/components/ui/button"
-
 export function NavLinks() {
   //@ Smooth scroll to section utility
   const scrollToSection = (sectionId: string) => {
