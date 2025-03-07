@@ -833,16 +833,15 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
             
             {/* Scrollable log area */}
             {isLogExpanded && processingLog.length > 0 && (
-              <div className="mt-2 border rounded p-2 bg-black/5 dark:bg-white/5 h-24 overflow-y-auto text-[10px] font-mono">
-                {processingLog.map((log, index) => (
+              <div className="text-xs h-40 bg-gray-100 dark:bg-gray-900 rounded p-2 overflow-y-auto flex flex-col space-y-1 font-mono">
+                {processingLog.map((log, i) => (
                   <div 
-                    key={index} 
+                    key={i} 
                     className={cn(
-                      "whitespace-pre-wrap break-all mb-0.5",
-                      log.startsWith('🆕') && "text-green-600 dark:text-green-400 font-medium",
-                      log.startsWith('✅') && "text-green-500 dark:text-green-400",
-                      log.startsWith('📝') && "text-blue-600 dark:text-blue-400",
-                      log.startsWith('ℹ️') && "text-gray-600 dark:text-gray-400",
+                      "leading-tight break-words",
+                      log.startsWith('🔍') && "text-blue-600 dark:text-blue-400 font-medium",
+                      log.startsWith('ℹ️') && "text-blue-500 dark:text-blue-300",
+                      log.startsWith('📦') && "text-indigo-600 dark:text-indigo-300 pl-2",
                       log.startsWith('📋') && "text-gray-500 dark:text-gray-500",
                       log.startsWith('⚠️') && "text-amber-600 dark:text-amber-400",
                       log.startsWith('❌') && "text-red-600 dark:text-red-400"

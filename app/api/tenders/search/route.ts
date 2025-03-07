@@ -84,10 +84,66 @@ export async function POST(req: NextRequest) {
             );
 
             console.log(`\n🔍 Processing keyword: "${keyword}"`);
+
+            // Log the search query
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "progress",
+                  current: i + 1,
+                  total: keywords.length,
+                  log: `🔍 Searching tenders for query: "${keyword}"`,
+                })}\n\n`
+              )
+            );
+
             const tenders = await searchTenders(keyword);
+            console.log(
+              `Found ${tenders.length} tenders for keyword "${keyword}"`
+            );
+
+            // Log how many results were found
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "progress",
+                  current: i + 1,
+                  total: keywords.length,
+                  log: `📋 Found ${tenders.length} total results for "${keyword}"`,
+                })}\n\n`
+              )
+            );
+
+            // Log processing details about individual tenders
+            const processingLimit = Math.min(tenders.length, 10);
+            if (processingLimit > 0) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "progress",
+                    current: i + 1,
+                    total: keywords.length,
+                    log: `ℹ️ Processing ${processingLimit} out of ${tenders.length} results for query: "${keyword}"`,
+                  })}\n\n`
+                )
+              );
+            }
+
             totalFound += tenders.length;
 
-            for (const tender of tenders) {
+            for (const tender of tenders.slice(0, 10)) {
+              // Log each individual tender being processed
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "progress",
+                    current: i + 1,
+                    total: keywords.length,
+                    log: `📦 Fetching details for tender: unit_id=${tender.unit_id}, job_number=${tender.job_number}`,
+                  })}\n\n`
+                )
+              );
+
               const tenderId = `unit_id=${tender.unit_id}&job_number=${tender.job_number}`;
               console.log(`\n📦 Processing tender: ${tenderId}`);
 
