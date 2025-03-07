@@ -40,6 +40,7 @@ export interface Tender {
     type?: string;
     [key: string]: any;
   };
+  records?: TenderRecord[];
 }
 
 export interface TenderGroup {
