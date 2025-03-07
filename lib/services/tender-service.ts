@@ -4,43 +4,126 @@ import { userService } from "./user-service";
 
 //@ Search tenders from the API
 export async function searchTenders(query: string): Promise<Tender[]> {
-  const response = await fetch(
-    `https://pcc.g0v.ronny.tw/api/searchbytitle?query=${encodeURIComponent(
-      query
-    )}`
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to fetch tenders for "${query}"`);
-  }
-  const data = await response.json();
+  try {
+    //! Using a more robust fetch with retry logic and longer delays
+    const fetchWithRetry = async (
+      url: string,
+      maxRetries = 5,
+      initialDelay = 500
+    ) => {
+      let lastError: Error | null = null;
 
-  // Fetch full details for each tender
-  const tendersWithDetails = await Promise.all(
-    (data.records || []).map(async (tender: Tender) => {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          // Exponential backoff with jitter to prevent thundering herd
+          const jitter = Math.random() * 200;
+          const delay = initialDelay * attempt + jitter;
+
+          if (attempt > 0) {
+            console.log(
+              `🕒 Retry attempt ${attempt}/${maxRetries} for ${url} after ${delay}ms delay`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+
+          const response = await fetch(url, {
+            headers: {
+              // Add headers to help avoid rate limiting
+              "User-Agent": "Mozilla/5.0 PCC-Autocheck/1.0",
+              Accept: "application/json",
+            },
+            // Add cache control to reduce redundant requests
+            cache: "no-cache",
+          });
+
+          if (response.status === 429) {
+            console.log(`⚠️ Rate limited! Waiting longer before retry...`);
+            // On rate limit, wait longer with exponential backoff
+            await new Promise((resolve) => setTimeout(resolve, delay * 2));
+            continue;
+          }
+
+          if (!response.ok) {
+            throw new Error(
+              `Failed with status ${response.status}: ${response.statusText}`
+            );
+          }
+
+          return await response.json();
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          console.error(`Attempt ${attempt + 1} failed:`, error);
+        }
+      }
+
+      throw new Error(
+        `Failed after ${maxRetries} attempts: ${
+          lastError?.message || "Unknown error"
+        }`
+      );
+    };
+
+    // Make the initial API call
+    console.log(`🔍 Searching tenders for query: "${query}"`);
+    const data = await fetchWithRetry(
+      `https://pcc.g0v.ronny.tw/api/searchbytitle?query=${encodeURIComponent(
+        query
+      )}`
+    );
+
+    // Return empty array if no records found
+    if (!data.records || data.records.length === 0) {
+      console.log(`No records found for query: "${query}"`);
+      return [];
+    }
+
+    // Process only the first 10 results to avoid rate limiting
+    const limitedResults = data.records.slice(0, 10);
+    console.log(
+      `Processing ${limitedResults.length} out of ${data.records.length} results for query: "${query}"`
+    );
+
+    // Use a queue to process tenders sequentially with delays
+    const queue = limitedResults.map((tender: TenderRecord) => async () => {
       try {
-        const detailResponse = await fetch(
-          `https://pcc.g0v.ronny.tw/api/tender?unit_id=${tender.unit_id}&job_number=${tender.job_number}`
+        console.log(
+          `Fetching details for tender: unit_id=${tender.unit_id}, job_number=${tender.job_number}`
         );
-        if (!detailResponse.ok) return tender;
 
-        const detailData = await detailResponse.json();
+        // Add substantial delay between detail requests
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        // Return all records instead of just the first one
+        const detailData = await fetchWithRetry(
+          `https://pcc.g0v.ronny.tw/api/tender?unit_id=${tender.unit_id}&job_number=${tender.job_number}`,
+          5, // 5 retries
+          2000 // Start with 2 second delay
+        );
+
         return {
           ...tender,
           records: detailData.records || [],
         };
       } catch (error) {
-        console.error(
-          `Failed to fetch details for tender ${tender.job_number}:`,
-          error
-        );
+        console.error(`Error fetching details for tender:`, error);
+        // Return the tender without details if fetch fails
         return tender;
       }
-    })
-  );
+    });
 
-  return tendersWithDetails;
+    // Process the queue sequentially
+    const results = [];
+    for (const task of queue) {
+      const result = await task();
+      results.push(result);
+    }
+
+    return results;
+  } catch (error: unknown) {
+    console.error(`Error in searchTenders for "${query}":`, error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Error searching tenders: ${errorMessage}`);
+  }
 }
 
 //@ Filter tender details based on type
@@ -152,10 +235,11 @@ export async function processTenders(keywords: string[], userId: string) {
       console.log(`User ${userId} is on free plan. Limiting to 5 keywords.`);
     }
 
-    // Define proper type for results
+    // Define proper type for results that includes relatedTenders
     const results: {
       tender: any;
       versions: any[];
+      relatedTenders: any[];
     }[] = [];
 
     for (const keyword of processKeywords) {
@@ -519,12 +603,6 @@ export const tenderService = {
         },
       });
 
-      // console.log('Saved tender version with enriched data:', {
-      //   tenderId,
-      //   versionId: version.id,
-      //   type: version.type
-      // })
-
       //@ Create or update tender view
       await db.tenderView.upsert({
         where: {
@@ -791,7 +869,8 @@ export const tenderService = {
 
     try {
       await userService.ensureUser(userId);
-      const results: { tender: any; versions: any[] }[] = [];
+      const results: { tender: any; versions: any[]; relatedTenders: any[] }[] =
+        [];
 
       //@ Helper function to delay between requests
       const delay = (ms: number) =>
@@ -815,10 +894,10 @@ export const tenderService = {
             lastError = new Error(`Status ${response.status}: ${errorText}`);
 
             // Wait longer between retries
-            await delay(initialDelay * Math.pow(2, i));
+            await delay(initialDelay);
           } catch (error) {
             lastError = error;
-            await delay(initialDelay * Math.pow(2, i));
+            await delay(initialDelay);
           }
         }
         throw lastError;
@@ -950,6 +1029,7 @@ export const tenderService = {
                       where: { tenderId },
                       orderBy: { date: "desc" },
                     }),
+                    relatedTenders: [],
                   });
                 }
               } catch (error) {
