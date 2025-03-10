@@ -21,6 +21,8 @@ import jsPDF from "jspdf";
 import { TenderCard } from "@/components/dashboard/tender-card";
 import ReactDOM from "react-dom/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useSubscription } from '@/lib/contexts/subscription-context';
+import { useToast } from "@/components/ui/use-toast";
 
 // Create a custom FilePdf icon since it might not be available in lucide-react
 const FilePdf = (props: any) => (
@@ -46,9 +48,10 @@ const FilePdf = (props: any) => (
 
 interface ExportButtonProps {
   tenders: TenderGroup[];
+  className?: string;
 }
 
-export function ExportButton({ tenders }: ExportButtonProps) {
+export function ExportButton({ tenders, className }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState<"json" | "text" | "pdf">("json");
   const [isOpen, setIsOpen] = useState(false);
@@ -57,26 +60,18 @@ export function ExportButton({ tenders }: ExportButtonProps) {
   const [exportProgress, setExportProgress] = useState(0);
   const [totalExportItems, setTotalExportItems] = useState(0);
   const [isProPlan, setIsProPlan] = useState(false);
+  const { toast } = useToast();
+  
+  // Use the subscription context instead of making a direct API call
+  const { subscriptionTier } = useSubscription();
 
-  // Add a useEffect to fetch user subscription status
+  // Update to use subscription context data
   useEffect(() => {
-    const fetchSubscriptionStatus = async () => {
-      try {
-        const response = await fetch('/api/users/subscription');
-        if (!response.ok) throw new Error('Failed to fetch subscription');
-        const data = await response.json();
-        setIsProPlan(data.isProPlan || false);
-      } catch (error) {
-        console.error('Error fetching subscription status:', error);
-        // Default to free tier if there's an error
-        setIsProPlan(false);
-      }
-    };
-    
-    fetchSubscriptionStatus();
-  }, []);
+    // Set pro plan status based on subscription context
+    setIsProPlan(subscriptionTier === 'pro');
+  }, [subscriptionTier]);
 
-  // Add a helper function to check if the current format requires pro plan
+  // Add back the helper function to check if the current format requires pro plan
   const requiresProPlan = () => {
     return (exportFormat === "text" || exportFormat === "pdf") && !isProPlan;
   };

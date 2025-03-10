@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
-import { processTenders, searchTenders } from "@/lib/services/tender-service";
+import {
+  fetchTenderDetails,
+  processTenderBatch,
+  searchTenders,
+} from "@/lib/services/tender-service";
 import { db } from "@/lib";
 import { serializeData, serializeTenderData } from "@/lib/utils";
+import { TenderRecord } from "@/types/tender";
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,7 +71,9 @@ export async function POST(req: NextRequest) {
         try {
           let processedCount = 0;
           let totalFound = 0;
+          let allTenders = [];
 
+          // First, search for all tenders across all keywords - this is the optimized part
           for (let i = 0; i < keywords.length; i++) {
             const keyword = keywords[i];
 
@@ -85,50 +92,102 @@ export async function POST(req: NextRequest) {
 
             console.log(`\n🔍 Processing keyword: "${keyword}"`);
             const tenders = await searchTenders(keyword);
+
+            // Add keyword to each tender for tracking
+            tenders.forEach((tender) => {
+              if (tender) {
+                tender.keyword = keyword;
+              }
+            });
+
+            allTenders.push(...tenders);
             totalFound += tenders.length;
 
-            for (const tender of tenders) {
+            // Send progress update with count
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "progress",
+                  current: i + 1,
+                  total: keywords.length,
+                  keyword: keyword,
+                  log: `📊 Found ${tenders.length} tenders for keyword "${keyword}"`,
+                })}\n\n`
+              )
+            );
+          }
+
+          // Deduplicate tenders by their ID
+          const uniqueTenders = [];
+          const tenderIds = new Set();
+
+          for (const tender of allTenders) {
+            if (!tender) continue;
+
+            const tenderId = `unit_id=${tender.unit_id}&job_number=${tender.job_number}`;
+            if (!tenderIds.has(tenderId)) {
+              tenderIds.add(tenderId);
+              uniqueTenders.push(tender);
+            }
+          }
+
+          console.log(
+            `Found ${uniqueTenders.length} unique tenders across all keywords`
+          );
+
+          // Process tenders in batches with true concurrency - this is the optimized part
+          const batchSize = 5; // Process 5 tenders at a time
+          const concurrencyLimit = 3; // Process 3 tenders concurrently
+
+          for (let i = 0; i < uniqueTenders.length; i += batchSize) {
+            const batch = uniqueTenders.slice(i, i + batchSize);
+
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "progress",
+                  current: i,
+                  total: uniqueTenders.length,
+                  log: `📊 Processing batch ${
+                    Math.floor(i / batchSize) + 1
+                  }/${Math.ceil(uniqueTenders.length / batchSize)} (${
+                    batch.length
+                  } tenders)`,
+                })}\n\n`
+              )
+            );
+
+            // Process tenders in this batch concurrently with limited concurrency
+            const queue = [...batch];
+            const inProgress: Promise<void>[] = [];
+            const results = [];
+
+            async function processNextTender() {
+              if (queue.length === 0) return;
+
+              const tender = queue.shift();
+              if (!tender) return processNextTender();
+
               const tenderId = `unit_id=${tender.unit_id}&job_number=${tender.job_number}`;
               console.log(`\n📦 Processing tender: ${tenderId}`);
 
               try {
-                // Fetch all versions for this tender
-                const response = await fetch(
-                  `https://pcc.g0v.ronny.tw/api/tender?unit_id=${tender.unit_id}&job_number=${tender.job_number}`
-                );
+                // Fetch tender details with our rate-limited function
+                const detailedTender = await fetchTenderDetails(tender);
 
-                if (!response.ok) {
-                  console.error(
-                    `Failed to fetch versions for tender ${tenderId}`
-                  );
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({
-                        type: "progress",
-                        current: i + 1,
-                        total: keywords.length,
-                        log: `⚠️ Error fetching data for keyword "${keyword}": ${response.status} ${response.statusText}`,
-                      })}\n\n`
-                    )
-                  );
-                  continue;
-                }
-
-                const data = await response.json();
-                console.log(
-                  `Found ${
-                    data.records?.length || 0
-                  } versions for tender ${tenderId}`
-                );
-
-                if (!data.records || data.records.length === 0) {
+                if (
+                  !detailedTender.records ||
+                  detailedTender.records.length === 0
+                ) {
                   console.warn(`No versions found for tender ${tenderId}`);
-                  continue;
+                  return processNextTender();
                 }
 
                 // Filter versions by date
-                const recentVersions = data.records.filter(
-                  (record: { date: number | string }) => {
+                const recentVersions = detailedTender.records.filter(
+                  (record) => {
+                    if (!record.date) return false;
+
                     // Parse the YYYYMMDD format date
                     const dateStr = record.date.toString();
                     const year = parseInt(dateStr.substring(0, 4));
@@ -154,17 +213,7 @@ export async function POST(req: NextRequest) {
                   console.log(
                     `Tender ${tenderId} filtered out - no versions within date range`
                   );
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({
-                        type: "progress",
-                        current: i + 1,
-                        total: keywords.length,
-                        log: `⚠️ Tender ${tenderId} filtered out - no versions within date range`,
-                      })}\n\n`
-                    )
-                  );
-                  continue;
+                  return processNextTender();
                 }
 
                 console.log(
@@ -177,13 +226,19 @@ export async function POST(req: NextRequest) {
                 });
 
                 if (storedTender) {
-                  // Update existing tender
+                  // Update existing tender with the keyword if it's not already there
+                  const updatedTags = [
+                    ...new Set(
+                      [...storedTender.tags, tender.keyword].filter(Boolean)
+                    ),
+                  ] as string[];
+
                   storedTender = await db.tender.update({
                     where: { id: tenderId },
                     data: {
                       updatedAt: new Date(),
                       tags: {
-                        set: [...new Set([...storedTender.tags, keyword])],
+                        set: updatedTags,
                       },
                     },
                   });
@@ -192,12 +247,12 @@ export async function POST(req: NextRequest) {
                   storedTender = await db.tender.create({
                     data: {
                       id: tenderId,
-                      tags: [keyword],
+                      tags: tender.keyword ? [tender.keyword] : [],
                     },
                   });
                 }
 
-                // Process filtered versions
+                // RESTORED: Process filtered versions properly
                 for (const record of recentVersions) {
                   console.log(
                     `Processing version: date=${record.date}, type=${
@@ -210,7 +265,9 @@ export async function POST(req: NextRequest) {
                     const existingVersion = await db.tenderVersion.findFirst({
                       where: {
                         tenderId,
-                        date: BigInt(record.date),
+                        date: record.date
+                          ? BigInt(record.date.toString())
+                          : BigInt(0),
                         type: record.brief?.type || "unknown",
                       },
                     });
@@ -220,7 +277,9 @@ export async function POST(req: NextRequest) {
                       await db.tenderVersion.create({
                         data: {
                           tenderId,
-                          date: BigInt(record.date),
+                          date: record.date
+                            ? BigInt(record.date.toString())
+                            : BigInt(0),
                           type: record.brief?.type || "unknown",
                           data: record,
                         },
@@ -235,7 +294,7 @@ export async function POST(req: NextRequest) {
                           `data: ${JSON.stringify({
                             type: "progress",
                             current: i + 1,
-                            total: keywords.length,
+                            total: uniqueTenders.length,
                             log: `✅ New version: ${
                               record.brief?.title?.substring(0, 30) || "Unnamed"
                             }${
@@ -250,20 +309,6 @@ export async function POST(req: NextRequest) {
                           record.date
                         }, type: ${record.brief?.type || "unknown"}`
                       );
-                      controller.enqueue(
-                        encoder.encode(
-                          `data: ${JSON.stringify({
-                            type: "progress",
-                            current: i + 1,
-                            total: keywords.length,
-                            log: `📋 Version exists: ${
-                              record.brief?.title?.substring(0, 30) || "Unnamed"
-                            }${
-                              record.brief?.title?.length > 30 ? "..." : ""
-                            } (${record.date})`,
-                          })}\n\n`
-                        )
-                      );
                     }
                   } catch (error) {
                     console.error(
@@ -273,7 +318,7 @@ export async function POST(req: NextRequest) {
                   }
                 }
 
-                // Create or update user view
+                // RESTORED: Create or update user view
                 await db.tenderView.upsert({
                   where: {
                     userId_tenderId: { userId, tenderId },
@@ -286,7 +331,7 @@ export async function POST(req: NextRequest) {
                   },
                 });
 
-                // Get the complete tender data with all relations
+                // RESTORED: Get the complete tender data with all relations
                 const savedTender = await db.tender.findUnique({
                   where: { id: tenderId },
                   include: {
@@ -299,17 +344,25 @@ export async function POST(req: NextRequest) {
                 if (savedTender) {
                   console.log(`✅ Preparing to stream tender: ${tenderId}`);
 
+                  // Check if this tender is completely new or has new versions
+                  const isCompletelyNew = !existingTenderIds.includes(tenderId);
+                  const hasNewVersionsOnly =
+                    !isCompletelyNew &&
+                    savedTender.versions.some(
+                      (v) => !existingVersionIds.get(tenderId)?.includes(v.id)
+                    );
+
                   // Get the latest version data
                   const latestVersion = savedTender.versions[0];
 
-                  // Prepare the tender data with proper structure
+                  // RESTORED: Prepare the tender data with proper structure
                   const tenderData = serializeTenderData({
                     tender: {
                       ...savedTender,
                       id: tenderId,
                       unit_id: tender.unit_id,
                       job_number: tender.job_number,
-                      date: latestVersion?.date || Date.now(),
+                      date: latestVersion?.date || BigInt(Date.now()),
                       title: latestVersion?.data?.brief?.title || "No title",
                       isArchived: false,
                       isHighlighted: false,
@@ -324,110 +377,104 @@ export async function POST(req: NextRequest) {
                       },
                     })),
                     relatedTenders: [],
-                    isNew: !existingTenderIds.includes(tenderId),
-                    hasNewVersions: savedTender.versions.some(
-                      (v) => !existingVersionIds.get(tenderId)?.includes(v.id)
-                    ),
+                    isNew: isCompletelyNew,
+                    hasNewVersions: hasNewVersionsOnly,
                   });
 
-                  // Log the status to client
-                  const isCompletelyNew = !existingTenderIds.includes(tenderId);
-                  const hasNewVersionsOnly =
-                    !isCompletelyNew &&
-                    savedTender.versions.some(
-                      (v) => !existingVersionIds.get(tenderId)?.includes(v.id)
-                    );
-
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({
-                        type: "progress",
-                        current: i + 1,
-                        total: keywords.length,
-                        log: isCompletelyNew
-                          ? `🆕 New tender: ${
-                              latestVersion?.data?.brief?.title?.substring(
-                                0,
-                                30
-                              ) || "Unnamed"
-                            }${
-                              latestVersion?.data?.brief?.title?.length > 30
-                                ? "..."
-                                : ""
-                            }`
-                          : hasNewVersionsOnly
-                          ? `📝 Updated tender: ${
-                              latestVersion?.data?.brief?.title?.substring(
-                                0,
-                                30
-                              ) || "Unnamed"
-                            }${
-                              latestVersion?.data?.brief?.title?.length > 30
-                                ? "..."
-                                : ""
-                            }`
-                          : `ℹ️ Existing tender: ${
-                              latestVersion?.data?.brief?.title?.substring(
-                                0,
-                                30
-                              ) || "Unnamed"
-                            }${
-                              latestVersion?.data?.brief?.title?.length > 30
-                                ? "..."
-                                : ""
-                            }`,
-                      })}\n\n`
-                    )
-                  );
-
-                  processedCount++; // Increment counter
-
-                  // Stream the data
+                  // RESTORED: Stream the complete tender data to client
                   const message = `data: ${JSON.stringify(tenderData)}\n\n`;
-                  // console.log(`📤 Streaming tender: ${tenderId}`, tenderData);
                   controller.enqueue(encoder.encode(message));
+
+                  // Add to our results
+                  results.push(savedTender);
+
+                  // Log status
+                  const statusLog = isCompletelyNew
+                    ? `🆕 New tender: ${
+                        latestVersion?.data?.brief?.title?.substring(0, 30) ||
+                        "Unnamed"
+                      }${
+                        latestVersion?.data?.brief?.title?.length > 30
+                          ? "..."
+                          : ""
+                      }`
+                    : hasNewVersionsOnly
+                    ? `📝 Updated tender: ${
+                        latestVersion?.data?.brief?.title?.substring(0, 30) ||
+                        "Unnamed"
+                      }${
+                        latestVersion?.data?.brief?.title?.length > 30
+                          ? "..."
+                          : ""
+                      }`
+                    : `ℹ️ Existing tender: ${
+                        latestVersion?.data?.brief?.title?.substring(0, 30) ||
+                        "Unnamed"
+                      }${
+                        latestVersion?.data?.brief?.title?.length > 30
+                          ? "..."
+                          : ""
+                      }`;
+
+                  console.log(statusLog);
                 } else {
                   console.log(`⚠️ No saved tender found for: ${tenderId}`);
                 }
               } catch (error) {
-                console.error(`❌ Error processing tender ${tenderId}:`, error);
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      type: "progress",
-                      current: i + 1,
-                      total: keywords.length,
-                      log: `❌ Error searching keyword "${keyword}": ${
-                        error instanceof Error ? error.message : String(error)
-                      }`,
-                    })}\n\n`
-                  )
-                );
+                console.error(`Error processing tender ${tenderId}:`, error);
               }
+
+              // Process next tender in queue
+              return processNextTender();
             }
+
+            // Start initial batch of promises
+            while (inProgress.length < concurrencyLimit && queue.length > 0) {
+              const promise = processNextTender();
+              inProgress.push(promise);
+
+              // Remove promise from inProgress when it resolves
+              promise.then(() => {
+                const index = inProgress.indexOf(promise);
+                if (index !== -1) inProgress.splice(index, 1);
+              });
+            }
+
+            // Wait for all promises in this batch to resolve
+            await Promise.all(inProgress);
+
+            // Update progress
+            processedCount += batch.length;
           }
 
-          console.log("\n✨ Finished processing all keywords");
-          // Send completion message with total found and processed counts
+          // Send completion message
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
                 type: "complete",
                 totalFound,
                 processedCount,
-                log: `🏁 Search completed: ${totalFound} tenders found, ${processedCount} within date range`,
+                log: `✨ Finished processing all keywords`,
               })}\n\n`
             )
           );
           controller.close();
         } catch (error) {
-          console.error("❌ Stream processing error:", error);
-          controller.error(error);
+          console.error("Error in stream:", error);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                error: error instanceof Error ? error.message : String(error),
+              })}\n\n`
+            )
+          );
+          controller.close();
         }
       },
     });
 
-    return new Response(stream, {
+    return new NextResponse(stream, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -435,7 +482,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("❌ Route error:", error);
+    console.error("Error in search route:", error);
     return NextResponse.json(
       { error: "Failed to search tenders" },
       { status: 500 }

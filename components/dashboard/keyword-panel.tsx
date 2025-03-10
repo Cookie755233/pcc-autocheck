@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { TenderEvent } from "@/lib/events/tender-events";
 import { TenderGroup } from "@/types/tender";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useSubscription } from '@/lib/contexts/subscription-context';
 
 interface KeywordPanelProps {
   className?: string;
@@ -48,15 +49,21 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
     new Map()
   );
   const [searchStats, setSearchStats] = useState({
-    totalSearched: 0,
-    inDateRange: 0,
-    addedToBoard: 0
+    totalFound: 0,
+    processedCount: 0,
+    isComplete: false,
   });
   const [processingLog, setProcessingLog] = useState<string[]>([]);
   const [isLogExpanded, setIsLogExpanded] = useState(false);
   const [isProPlan, setIsProPlan] = useState(false);
   const [keywordLimitReached, setKeywordLimitReached] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const FREE_TIER_KEYWORD_LIMIT = 5;
+
+  // Use the subscription context instead of making a direct API call
+  const { subscriptionTier, isLoading: isLoadingSubscription } = useSubscription();
 
   const fetchKeywords = async () => {
     if (!user?.id) return;
@@ -92,27 +99,14 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
 
   useEffect(() => {
     if (user?.id) {
-      // Fetch user's subscription status
-      const fetchSubscriptionStatus = async () => {
-        try {
-          const response = await fetch('/api/users/subscription');
-          if (!response.ok) throw new Error('Failed to fetch subscription');
-          const data = await response.json();
-          setIsProPlan(data.isProPlan || false);
-          
-          // Check if the keyword limit is reached for free tier users
-          setKeywordLimitReached(!data.isProPlan && keywords.length >= FREE_TIER_KEYWORD_LIMIT);
-        } catch (error) {
-          console.error('Error fetching subscription status:', error);
-          // Default to free tier if there's an error
-          setIsProPlan(false);
-          setKeywordLimitReached(keywords.length >= FREE_TIER_KEYWORD_LIMIT);
-        }
-      };
+      // Use subscription context data instead of making a direct API call
+      const isProTier = subscriptionTier === 'pro';
+      setIsProPlan(isProTier);
       
-      fetchSubscriptionStatus();
+      // Check if the keyword limit is reached for free tier users
+      setKeywordLimitReached(!isProTier && keywords.length >= FREE_TIER_KEYWORD_LIMIT);
     }
-  }, [user?.id, keywords.length]);
+  }, [user?.id, keywords.length, subscriptionTier]);
 
   const handleAddKeyword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -301,9 +295,9 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
     setIsFetching(true);
     // Reset stats at start of search
     setSearchStats({
-      totalSearched: 0,
-      inDateRange: 0,
-      addedToBoard: 0
+      totalFound: 0,
+      processedCount: 0,
+      isComplete: false,
     });
     setProcessingLog([]); // Clear previous logs
 
@@ -372,8 +366,9 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                 console.log("🏁 Search complete:", data);
                 setSearchStats(prev => ({
                   ...prev,
-                  totalSearched: data.totalFound || 0,
-                  inDateRange: data.processedCount || 0
+                  totalFound: data.totalFound || 0,
+                  processedCount: data.processedCount || 0,
+                  isComplete: true
                 }));
 
                 // Show completion toast only after we have final stats
@@ -433,7 +428,7 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
                 // Update stats
                 setSearchStats(prev => ({
                   ...prev,
-                  addedToBoard: prev.addedToBoard + 1
+                  processedCount: prev.processedCount + 1
                 }));
               }
             } catch (error) {
@@ -860,9 +855,9 @@ export function KeywordPanel({ className, onTendersFound }: KeywordPanelProps) {
             )}
             
             {/* Stats summary */}
-            {searchStats.addedToBoard > 0 && (
+            {searchStats.processedCount > 0 && (
               <p className="text-green-600 dark:text-green-400 mt-0.5 text-center text-[11px]">
-                Found {searchStats.addedToBoard} tenders matching the search conditions
+                Found {searchStats.processedCount} tenders matching the search conditions
               </p>
             )}
           </div>

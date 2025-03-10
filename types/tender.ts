@@ -14,6 +14,8 @@ export interface TenderBrief {
 export interface TenderRecord {
   unit_id: string;
   job_number: string;
+  date?: string | number;
+  brief?: any;
   [key: string]: any; // For other fields from the API
 }
 
@@ -40,6 +42,9 @@ export interface Tender {
     type?: string;
     [key: string]: any;
   };
+  // Added for API integration
+  records?: TenderRecord[];
+  keyword?: string; // Track which keyword found this tender
 }
 
 export interface TenderGroup {
@@ -49,6 +54,7 @@ export interface TenderGroup {
 }
 
 export interface TenderVersion {
+  id?: string;
   date: string | number;
   type: string;
   data: {
